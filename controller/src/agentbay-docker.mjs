@@ -214,7 +214,7 @@ export class AgentBayDockerClient {
     return match[1]
   }
 
-  async build({ context, dockerfile, tag, buildArgs = {}, labels = {}, timeoutMs = 1_800_000 }) {
+  async build({ context, dockerfile, tag, buildArgs = {}, labels = {}, timeoutMs = 3_600_000 }) {
     const contextPath = resolve(context)
     const dockerfilePath = resolve(dockerfile)
     const relativeDockerfile = relative(contextPath, dockerfilePath)
