@@ -153,3 +153,44 @@ print("ok")
   })
   assert.equal(stdout.trim(), 'ok')
 })
+
+test('AgentBay bridge 在复用现成 Docker daemon 时仍配置 registry mirror', async () => {
+  const script = String.raw`
+import importlib.util
+import os
+
+spec = importlib.util.spec_from_file_location("agentbay_bridge", "scripts/agentbay-docker-bridge.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+class Result:
+    exit_code = 0
+    stderr = ""
+    def __init__(self, stdout=""):
+        self.stdout = stdout
+
+bridge = object.__new__(module.Bridge)
+commands = []
+def vm(args, timeout=120):
+    commands.append(("vm", args))
+    if args[:3] == ["sudo", "docker", "info"]:
+        return Result("[]")
+    return Result()
+def checked(args, timeout=120):
+    commands.append(("checked", args))
+    return Result()
+bridge._vm = vm
+bridge._checked = checked
+os.environ["HARNESS_RSI_AGENTBAY_REGISTRY_MIRROR"] = "https://docker.1panel.live"
+bridge._ensure_docker()
+
+assert not any("apt-get" in " ".join(args) for kind, args in commands if kind == "checked")
+assert any("/etc/docker/daemon.json" in " ".join(args) for kind, args in commands if kind == "checked")
+print("ok")
+`
+  const { stdout } = await execFileAsync('python3', ['-c', script], {
+    cwd: repositoryRoot,
+    timeout: 10_000,
+  })
+  assert.equal(stdout.trim(), 'ok')
+})

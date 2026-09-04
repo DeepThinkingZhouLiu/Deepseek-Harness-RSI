@@ -225,13 +225,22 @@ class Bridge:
 
     def _ensure_docker(self) -> None:
         probe = self._vm(["sh", "-lc", "command -v docker >/dev/null && sudo docker info >/dev/null"], 30)
-        if result_fields(probe)["exitCode"] == 0:
-            return
-        self._checked(
-            ["sh", "-lc", "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io"],
-            900,
-        )
+        if result_fields(probe)["exitCode"] != 0:
+            self._checked(
+                ["sh", "-lc", "sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq docker.io"],
+                900,
+            )
         mirror = os.environ.get("HARNESS_RSI_AGENTBAY_REGISTRY_MIRROR", "https://docker.1panel.live")
+        configured = self._vm(
+            ["sudo", "docker", "info", "--format", "{{json .RegistryConfig.Mirrors}}"],
+            30,
+        )
+        try:
+            mirrors = json.loads(result_fields(configured)["stdout"])
+        except (json.JSONDecodeError, TypeError):
+            mirrors = []
+        if mirror and mirror.rstrip("/") in {str(value).rstrip("/") for value in mirrors}:
+            return
         daemon = {"registry-mirrors": [mirror]} if mirror else {}
         encoded = json.dumps(daemon, separators=(",", ":"))
         self._checked(
