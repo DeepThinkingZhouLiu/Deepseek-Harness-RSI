@@ -1,6 +1,6 @@
 FROM python:3.12-slim-bookworm
 
-ARG DEBIAN_MIRROR=https://mirrors.aliyun.com/debian
+ARG DEBIAN_MIRROR=https://mirrors.tencent.com/debian
 ARG PYPI_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 
 ENV DEBIAN_FRONTEND=noninteractive \
