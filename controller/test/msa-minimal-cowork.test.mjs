@@ -502,6 +502,104 @@ test('MSA Cowork Candidate 不把空 Final 或空 Bash 当成有效动作', asyn
   assert.deepEqual(result.valid_final, ['final', 'done'])
 })
 
+test('MSA Cowork Candidate 兼容明确 Terra Bash 方言并优先已有合法块', async () => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  const script = [
+    'import json, sys, types',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'sys.modules["model"] = types.SimpleNamespace(query=lambda *args: "unused")',
+    'sys.modules["tools"] = types.SimpleNamespace(run_bash=lambda *args: "unused")',
+    'from agent import Agent',
+    'print(json.dumps({',
+    '  "text": Agent.parse("I will inspect.\\nto=bash code:\\npwd && ls"),',
+    '  "json": Agent.parse(\'to=bash.exec code:\\n{"cmd":"pwd && ls"}\'),',
+    '  "existing": Agent.parse("to=bash code:\\nignore\\n<bash>echo safe</bash>"),',
+    '}))',
+  ].join('\n')
+  const { stdout } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+  const result = JSON.parse(stdout)
+  assert.deepEqual(result.text, ['bash', 'pwd && ls'])
+  assert.deepEqual(result.json, ['bash', 'pwd && ls'])
+  assert.deepEqual(result.existing, ['bash', 'echo safe'])
+})
+
+test('MSA Cowork Candidate 在交付文件改变后接受裸 Final 并记录 parser 方言', async () => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'rsi-msa-bare-final-'))
+  const profileRoot = join(fixtureRoot, 'profiles')
+  const tracePath = join(fixtureRoot, 'agent.jsonl')
+  await mkdir(profileRoot)
+  await writeFile(join(profileRoot, 'cowork.md'), 'fixture prompt\n')
+  await writeFile(join(profileRoot, 'cowork.json'), `${JSON.stringify({
+    max_steps: 3,
+    max_output_tokens: 1024,
+    maximum_skill_files: 1,
+    maximum_skill_chars: 1024,
+    command_timeout_seconds: 1,
+    max_observation_chars: 1024,
+  })}\n`)
+  const script = [
+    'import json, pathlib, sys, types',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    `workspace = pathlib.Path(${JSON.stringify(fixtureRoot)})`,
+    'responses = iter(["<bash>create</bash>", "Created deliverable.docx and checked it."])',
+    'sys.modules["model"] = types.SimpleNamespace(query=lambda *args: next(responses))',
+    'def run_bash(*args):',
+    '    (workspace / "deliverable.docx").write_bytes(b"office")',
+    '    return "created"',
+    'sys.modules["tools"] = types.SimpleNamespace(run_bash=run_bash)',
+    'from agent import Agent',
+    `runner = Agent(workspace, "cowork", "http://gateway", "dummy", "fixture", 1024, 3, pathlib.Path(${JSON.stringify(tracePath)}))`,
+    'answer = runner.run("fixture task", workspace)',
+    `events = [json.loads(line) for line in pathlib.Path(${JSON.stringify(tracePath)}).read_text().splitlines()]`,
+    'print(json.dumps({"answer": answer, "events": events}))',
+  ].join('\n')
+  const { stdout } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+  const result = JSON.parse(stdout)
+  assert.equal(result.answer, 'Created deliverable.docx and checked it.')
+  assert.equal(result.events.filter(({ type }) => type === 'model').length, 2)
+  assert.equal(result.events.at(-1).parserDialect, 'bare-final-after-deliverable')
+})
+
+test('MSA Cowork Candidate 对连续未解析回复反馈具体失败原因', async () => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'rsi-msa-parser-feedback-'))
+  const profileRoot = join(fixtureRoot, 'profiles')
+  const tracePath = join(fixtureRoot, 'agent.jsonl')
+  await mkdir(profileRoot)
+  await writeFile(join(profileRoot, 'cowork.md'), 'fixture prompt\n')
+  await writeFile(join(profileRoot, 'cowork.json'), `${JSON.stringify({
+    max_steps: 2,
+    max_output_tokens: 1024,
+    maximum_skill_files: 1,
+    maximum_skill_chars: 1024,
+    command_timeout_seconds: 1,
+    max_observation_chars: 1024,
+  })}\n`)
+  const script = [
+    'import json, pathlib, sys, types',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'seen = []',
+    'def query(*args):',
+    '    seen.append(args[3])',
+    '    return "I am unable to modify the file." if len(seen) == 1 else "<final>stopped</final>"',
+    'sys.modules["model"] = types.SimpleNamespace(query=query)',
+    'sys.modules["tools"] = types.SimpleNamespace(run_bash=lambda *args: "unused")',
+    'from agent import Agent',
+    `runner = Agent(pathlib.Path(${JSON.stringify(fixtureRoot)}), "cowork", "http://gateway", "dummy", "fixture", 1024, 2, pathlib.Path(${JSON.stringify(tracePath)}))`,
+    `runner.run("fixture task", pathlib.Path(${JSON.stringify(fixtureRoot)}))`,
+    'print(json.dumps(seen[1][-1]["content"]))',
+  ].join('\n')
+  const { stdout } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+  assert.match(JSON.parse(stdout), /Parser failure 1: Your response refused the task/u)
+})
+
 test('MSA Cowork Chat Client 对正常结束的空流最多重试两次', async (context) => {
   const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
   let requests = 0

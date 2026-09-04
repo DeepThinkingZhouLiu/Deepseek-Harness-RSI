@@ -383,6 +383,30 @@ function compactText(value, maximumBytes) {
   return `${text}${suffix}`
 }
 
+export function summarizeSolverParserTrace(trace, maximumSamples = 3) {
+  const summary = { modelTurns: 0, unparsedTurns: 0, parserFailureSamples: [] }
+  for (const line of String(trace ?? '').split(/\r?\n/u)) {
+    if (!line.trim()) continue
+    let event
+    try {
+      event = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (event?.type !== 'model') continue
+    summary.modelTurns += 1
+    if (event.parsedAction === 'bash' || event.parsedAction === 'final') continue
+    summary.unparsedTurns += 1
+    if (summary.parserFailureSamples.length >= maximumSamples) continue
+    const reason = typeof event.parseFailureReason === 'string'
+      ? event.parseFailureReason
+      : 'parser-did-not-record-a-recognized-action'
+    const excerpt = String(event.content ?? '').replace(/\s+/gu, ' ').trim().slice(0, 240)
+    summary.parserFailureSamples.push(`${reason}: ${excerpt || '(empty response)'}`)
+  }
+  return summary
+}
+
 function verifierFeedback(result, maximumBytes) {
   const lines = [
     `status=${result.status}`,
@@ -453,11 +477,20 @@ function recordForTask({ layout, partition, trials, runRoot, feedbackLimit }) {
     })),
   }
   if (partition === 'feedback') {
+    const parserDiagnostics = trials.reduce((summary, trial) => ({
+      modelTurns: summary.modelTurns + (trial.parserDiagnostics?.modelTurns ?? 0),
+      unparsedTurns: summary.unparsedTurns + (trial.parserDiagnostics?.unparsedTurns ?? 0),
+      parserFailureSamples: [
+        ...summary.parserFailureSamples,
+        ...(trial.parserDiagnostics?.parserFailureSamples ?? []),
+      ].slice(0, 3),
+    }), { modelTurns: 0, unparsedTurns: 0, parserFailureSamples: [] })
     record.feedback = {
       taskInstruction: compactText(layout.task.instruction, feedbackLimit),
       solverAnswer: compactText(trials.map((trial) => trial.solverAnswer).join('\n\n'), feedbackLimit),
       verifierFeedback: compactText(trials.map((trial) => trial.verifierFeedback).join('\n\n'), feedbackLimit),
       errors: [],
+      ...parserDiagnostics,
     }
   }
   return record
@@ -761,6 +794,7 @@ export class OmegaUseOfficeValEnvironment {
       inputTokens: solver.modelUsage?.complete ? solver.modelUsage.inputTokens : null,
       outputTokens: solver.modelUsage?.complete ? solver.modelUsage.outputTokens : null,
       solverAnswer: solver.answer,
+      parserDiagnostics: summarizeSolverParserTrace(solver.trace),
       verifierFeedback: feedback,
       policyViolations: policyViolation ? [policyViolation] : [],
       artifacts,

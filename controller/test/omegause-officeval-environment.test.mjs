@@ -13,12 +13,28 @@ import {
   concurrentMap,
   OmegaUseOfficeValEnvironment,
   normalizeOmegaUseVerifierReward,
+  summarizeSolverParserTrace,
   validateOmegaUseSourceManifest,
 } from '../src/environments/omegause-officeval.mjs'
 import { ProtocolError, validateBenchmark } from '../src/protocol.mjs'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const execFileAsync = promisify(execFile)
+
+test('OmegaUse 从 Solver trace 生成紧凑 parser 统计', () => {
+  const trace = [
+    { type: 'model', step: 1, content: '<bash>ls</bash>', parsedAction: 'bash', parserDialect: 'xml-bash' },
+    { type: 'bash', step: 1, command: 'ls', observation: '{}' },
+    { type: 'model', step: 2, content: 'I will continue.', parsedAction: null, parseFailureReason: 'missing-action-envelope' },
+    { type: 'model', step: 3, content: 'x'.repeat(400), parsedAction: null, parseFailureReason: 'missing-action-envelope' },
+  ].map((event) => JSON.stringify(event)).join('\n')
+  const summary = summarizeSolverParserTrace(trace, 1)
+  assert.equal(summary.modelTurns, 3)
+  assert.equal(summary.unparsedTurns, 2)
+  assert.equal(summary.parserFailureSamples.length, 1)
+  assert.match(summary.parserFailureSamples[0], /I will continue/u)
+  assert.ok(summary.parserFailureSamples[0].length < 300)
+})
 
 test('OmegaUse 受控并发不超过上限且保持 Benchmark 顺序', async () => {
   let active = 0
