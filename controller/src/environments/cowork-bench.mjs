@@ -170,6 +170,11 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
     const judge = join(testsRoot, 'judge.py')
     const judgeInfo = await lstat(judge).catch(() => null)
     if (!judgeInfo?.isFile() || judgeInfo.isSymbolicLink()) throw new ProtocolError(`Cowork Task 缺少 tests/judge.py：${instanceId}`)
+    const environmentAssets = resolve(this.repositoryRoot, this.environment.task.environmentAssets)
+    const assetsInfo = await lstat(environmentAssets).catch(() => null)
+    if (!assetsInfo?.isDirectory() || assetsInfo.isSymbolicLink()) {
+      throw new ProtocolError(`Cowork Environment Assets 必须是普通目录：${environmentAssets}`)
+    }
     return Object.freeze({
       instanceId,
       taskRoot,
@@ -177,6 +182,7 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
       record: { verifier: { path: 'tests/judge.py' } },
       inputs: inputRecords,
       judge,
+      environmentAssets,
     })
   }
 

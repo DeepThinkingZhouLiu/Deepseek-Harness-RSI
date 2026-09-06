@@ -37,7 +37,7 @@ def main() -> None:
     evaluate = getattr(module, "evaluate", None)
     if not callable(evaluate):
         raise RuntimeError("Cowork Judge 缺少 evaluate(directory) 函数")
-    result = evaluate(str(submission))
+    result = evaluate(submission)
     if not isinstance(result, dict):
         raise RuntimeError("Cowork Judge 返回值不是对象")
     reward = result.get("reward")
