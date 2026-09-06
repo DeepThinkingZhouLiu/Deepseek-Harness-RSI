@@ -1,0 +1,22 @@
+{
+  "apiVersion": "harness-rsi/cowork-bench-manifest-v1",
+  "repositoryRevision": "59ee4f18b4a25f589df71652e1292cee3e115421",
+  "tasks": [
+    {
+      "id": "cowork-evo/cowork-bench-rzd-trip-plan-from-outline",
+      "path": "tasks/docx/cowork-bench-rzd-trip-plan-from-outline"
+    },
+    {
+      "id": "cowork-evo/forte-legal-020-power-of-attorney-risk-report",
+      "path": "tasks/docx/forte-legal-020-power-of-attorney-risk-report"
+    },
+    {
+      "id": "cowork-evo/officebench-1-15-syllabus-integrity",
+      "path": "tasks/docx/officebench-1-15-syllabus-integrity"
+    },
+    {
+      "id": "cowork-evo/officebench-1-12-class-roster-counts",
+      "path": "tasks/docx/officebench-1-12-class-roster-counts"
+    }
+  ]
+}

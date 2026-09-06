@@ -1147,6 +1147,18 @@ export function validateEnvironmentAdapter(input) {
   if (protocol === 'omegause-officeval-docker-v1') {
     return validateOmegaUseOfficeValEnvironment({ id, spec, protocol })
   }
+  if (protocol === 'cowork-bench-docker-v1') {
+    // Cowork-Bench 与 OmegaUse 共用 Docker/Gateway 资源约束；任务发现和
+    // Judge 调用由独立 Environment Driver 处理，避免把 Harbor 目录格式
+    // 塞进 OmegaUse 的固定 manifest 逻辑。
+    const compatibleSpec = { ...spec, protocol: 'omegause-officeval-docker-v1' }
+    const validated = validateOmegaUseOfficeValEnvironment({
+      id,
+      spec: compatibleSpec,
+      protocol,
+    })
+    return validated
+  }
   throw new ProtocolError(`当前未实现 Environment Protocol：${protocol}`)
 }
 

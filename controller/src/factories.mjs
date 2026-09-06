@@ -1,4 +1,5 @@
 import { OmegaUseOfficeValEnvironment } from './environments/omegause-officeval.mjs'
+import { CoworkBenchEnvironment } from './environments/cowork-bench.mjs'
 import { TextReasoningEnvironment } from './environments/text-reasoning.mjs'
 import { diffModelUsage } from './cowork-model-gateway.mjs'
 import { assertPathKind } from './config.mjs'
@@ -264,6 +265,7 @@ function createDshUpdaterDriver({
 }
 
 registerEnvironmentDriver('omegause-officeval-docker-v1', (options) => new OmegaUseOfficeValEnvironment(options))
+registerEnvironmentDriver('cowork-bench-docker-v1', (options) => new CoworkBenchEnvironment(options))
 registerEnvironmentDriver('text-reasoning-deterministic-v1', (options) => new TextReasoningEnvironment(options))
 registerSolverDriver('dsh-headless-docker-v1', createDshSolverDriver)
 registerSolverDriver('msa-minimal-docker-v1', createMsaMinimalCoworkSolverDriver)
