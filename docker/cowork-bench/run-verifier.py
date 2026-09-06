@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -35,9 +36,21 @@ def main() -> None:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     evaluate = getattr(module, "evaluate", None)
-    if not callable(evaluate):
-        raise RuntimeError("Cowork Judge 缺少 evaluate(directory) 函数")
-    result = evaluate(submission)
+    if callable(evaluate):
+        result = evaluate(submission)
+    else:
+        # Cowork-Bench 的部分 OfficeBench 题使用 CLI Judge，而不是 Python 函数。
+        judge_result = Path(args.output).with_name("judge-result.json")
+        reward_file = Path(args.output).with_name("judge-reward.txt")
+        process = subprocess.run(
+            [sys.executable, str(judge_path), "--artifact-dir", str(submission),
+             "--result", str(judge_result), "--reward-file", str(reward_file)],
+            capture_output=True, text=True, timeout=1200, check=False,
+        )
+        if not judge_result.is_file():
+            detail = (process.stderr or process.stdout or "无结果文件")[-2000:]
+            raise RuntimeError(f"Cowork CLI Judge 未生成结果：{detail}")
+        result = json.loads(judge_result.read_text(encoding="utf-8"))
     if not isinstance(result, dict):
         raise RuntimeError("Cowork Judge 返回值不是对象")
     reward = result.get("reward")
