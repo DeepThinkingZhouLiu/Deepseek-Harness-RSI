@@ -7,6 +7,13 @@ import os
 import re
 from pathlib import Path
 
+from image_tool import (
+    ImageToolError,
+    MAX_IMAGE_BYTES,
+    MAX_IMAGE_CONTEXT_BYTES,
+    MAX_IMAGE_OBSERVATIONS,
+    read_image,
+)
 from model import query
 from tools import run_bash
 
@@ -15,6 +22,7 @@ BASH_PATTERNS = (
     re.compile(r"<bash>\s*(.*?)\s*</bash>", re.DOTALL | re.IGNORECASE),
     re.compile(r"```bash\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE),
 )
+IMAGE_PATTERN = re.compile(r"<view_image>\s*(.*?)\s*</view_image>", re.DOTALL | re.IGNORECASE)
 FINAL_PATTERN = re.compile(r"<final>\s*(.*?)\s*</final>", re.DOTALL | re.IGNORECASE)
 
 
@@ -85,6 +93,14 @@ class Agent:
             maximum_output_tokens,
         )
         self.maximum_steps = min(int(self.config["max_steps"]), maximum_steps)
+        configured_image_bytes = self.config.get("max_image_bytes", MAX_IMAGE_CONTEXT_BYTES)
+        self.maximum_image_bytes = (
+            configured_image_bytes
+            if isinstance(configured_image_bytes, int)
+            and not isinstance(configured_image_bytes, bool)
+            and 1 <= configured_image_bytes <= MAX_IMAGE_BYTES
+            else MAX_IMAGE_BYTES
+        )
         self.trace_path = trace_path
 
     def trace(self, event: dict) -> None:
@@ -98,6 +114,11 @@ class Agent:
             content = final.group(1).strip()
             if content:
                 return "final", content
+        image = IMAGE_PATTERN.search(reply)
+        if image:
+            content = image.group(1).strip()
+            if content:
+                return "view_image", content
         for pattern in BASH_PATTERNS:
             action = pattern.search(reply)
             if action:
@@ -111,6 +132,8 @@ class Agent:
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": task},
         ]
+        image_observations = 0
+        image_context_bytes = 0
         for step in range(1, self.maximum_steps + 1):
             reply = query(
                 self.gateway_url,
@@ -141,9 +164,74 @@ class Agent:
                     "role": "user",
                     "content": f"Bash observation:\n{observation}\nContinue with one <bash> or <final> block.",
                 })
+            elif parsed and parsed[0] == "view_image":
+                requested_path = parsed[1]
+                try:
+                    if image_observations >= MAX_IMAGE_OBSERVATIONS:
+                        raise ImageToolError(
+                            f"本轮最多查看 {MAX_IMAGE_OBSERVATIONS} 张图片"
+                        )
+                    image = read_image(
+                        workspace,
+                        requested_path,
+                        maximum_bytes=self.maximum_image_bytes,
+                    )
+                    encoded_bytes = int(image["encoded_bytes"])
+                    if image_context_bytes + encoded_bytes > MAX_IMAGE_CONTEXT_BYTES:
+                        raise ImageToolError("本轮图片上下文已达到大小上限")
+                    image_observations += 1
+                    image_context_bytes += encoded_bytes
+                    self.trace({
+                        "type": "image_observation",
+                        "step": step,
+                        "path": image["path"],
+                        "mime_type": image["mime_type"],
+                        "bytes": image["bytes"],
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    f"Image observation for {image['path']} "
+                                    f"({image['mime_type']}, {image['bytes']} bytes). "
+                                    "Inspect the image and continue with exactly one "
+                                    "<bash>...</bash> or <view_image>...</view_image> "
+                                    "or <final>...</final> block."
+                                ),
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": image["data_url"],
+                                    "detail": "auto",
+                                },
+                            },
+                        ],
+                    })
+                except (ImageToolError, OSError, ValueError) as error:
+                    self.trace({
+                        "type": "image_observation",
+                        "step": step,
+                        "path": requested_path[:256],
+                        "status": "rejected",
+                        "reason": str(error),
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"Image observation failed: {error}\n"
+                            "Use another relative PNG/JPEG/WEBP/GIF path, or continue "
+                            "with exactly one <bash>...</bash> or <final>...</final> block."
+                        ),
+                    })
             else:
                 messages.append({
                     "role": "user",
-                    "content": "Use exactly one <bash>...</bash> block or one <final>...</final> block.",
+                    "content": (
+                        "Use exactly one <bash>...</bash>, "
+                        "<view_image>relative/path</view_image>, or <final>...</final> block."
+                    ),
                 })
         return "The agent exhausted its step budget before completing the requested deliverable."

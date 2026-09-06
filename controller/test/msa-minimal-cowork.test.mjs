@@ -442,6 +442,98 @@ test('MSA Cowork CandidateSeed Python 可解析，Chat Client 可读取 SSE', as
   assert.equal(requests[0].body.stream, true)
 })
 
+test('MSA Cowork Agent 将安全的 view_image 动作转换为多模态消息且不把图片写入 Trace', async () => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'rsi-msa-image-agent-'))
+  const profileRoot = join(fixtureRoot, 'profiles')
+  const workspace = join(fixtureRoot, 'workspace')
+  const tracePath = join(fixtureRoot, 'agent.jsonl')
+  await Promise.all([mkdir(profileRoot), mkdir(workspace)])
+  await writeFile(join(profileRoot, 'cowork.md'), 'fixture prompt\n')
+  await writeFile(join(profileRoot, 'cowork.json'), `${JSON.stringify({
+    max_steps: 2,
+    max_output_tokens: 1024,
+    maximum_skill_files: 1,
+    maximum_skill_chars: 1024,
+    command_timeout_seconds: 1,
+    max_observation_chars: 1024,
+    max_image_bytes: 4096,
+  })}\n`)
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
+  await writeFile(join(workspace, 'preview.png'), png)
+  const script = [
+    'import base64, json, pathlib, sys, types',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'calls = []',
+    'replies = iter(["<view_image>preview.png</view_image>", "<final>done</final>"])',
+    'def fake_query(*args):',
+    '    calls.append(args[3])',
+    '    return next(replies)',
+    'sys.modules["model"] = types.SimpleNamespace(query=fake_query)',
+    'sys.modules["tools"] = types.SimpleNamespace(run_bash=lambda *args: "unused")',
+    'from agent import Agent',
+    `runner = Agent(pathlib.Path(${JSON.stringify(fixtureRoot)}), "cowork", "http://gateway", "dummy", "fixture", 1024, 2, pathlib.Path(${JSON.stringify(tracePath)}))`,
+    `answer = runner.run("fixture task", pathlib.Path(${JSON.stringify(workspace)}))`,
+    'message = calls[1][-1]',
+    'image = message["content"][1]["image_url"]',
+    'trace = pathlib.Path(' + JSON.stringify(tracePath) + ').read_text(encoding="utf-8")',
+    'print(json.dumps({"answer": answer, "requests": len(calls), "message": message, "trace": trace}))',
+  ].join('\n')
+  const { stdout } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+  const result = JSON.parse(stdout)
+  assert.equal(result.answer, 'done')
+  assert.equal(result.requests, 2)
+  assert.equal(result.message.role, 'user')
+  assert.equal(result.message.content[0].type, 'text')
+  assert.equal(result.message.content[1].type, 'image_url')
+  assert.equal(result.message.content[1].image_url.detail, 'auto')
+  assert.match(result.message.content[1].image_url.url, /^data:image\/png;base64,/u)
+  assert.equal(
+    Buffer.from(result.message.content[1].image_url.url.split(',', 2)[1], 'base64').toString('base64'),
+    png.toString('base64'),
+  )
+  assert.match(result.trace, /"type": "image_observation"/u)
+  assert.match(result.trace, /"path": "preview\.png"/u)
+  assert.doesNotMatch(result.trace, new RegExp(png.toString('base64'), 'u'))
+})
+
+test('MSA 图片工具拒绝越界路径、符号链接、伪图片和超限文件', async () => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'rsi-msa-image-policy-'))
+  const workspace = join(fixtureRoot, 'workspace')
+  await mkdir(workspace)
+  const script = [
+    'import base64, json, pathlib, sys',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'from image_tool import ImageToolError, read_image',
+    `root = pathlib.Path(${JSON.stringify(workspace)})`,
+    'png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")',
+    '(root / "ok.png").write_bytes(png)',
+    '(root / "fake.png").write_bytes(b"not an image")',
+    '(root / "large.png").write_bytes(png + b"x" * 32)',
+    '(root / "link.png").symlink_to(root / "ok.png")',
+    'accepted = read_image(root, "./ok.png")',
+    'rejected = {}',
+    'for name in ["/etc/passwd", "../ok.png", "fake.png", "link.png", "large.png"]:',
+    '    try:',
+    '        read_image(root, name, maximum_bytes=16)',
+    '    except ImageToolError as error:',
+    '        rejected[name] = str(error)',
+    '    else:',
+    '        rejected[name] = None',
+    'print(json.dumps({"path": accepted["path"], "mime": accepted["mime_type"], "rejected": rejected}))',
+  ].join('\n')
+  const { stdout } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+  const result = JSON.parse(stdout)
+  assert.equal(result.path, 'ok.png')
+  assert.equal(result.mime, 'image/png')
+  for (const value of Object.values(result.rejected)) assert.equal(typeof value, 'string')
+})
+
 test('MSA Cowork Candidate Profile 不能抬高 Controller 下发的步数上限', async () => {
   const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'rsi-msa-step-cap-'))
