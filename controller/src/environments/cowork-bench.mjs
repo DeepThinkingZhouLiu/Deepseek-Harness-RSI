@@ -208,7 +208,7 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
       image: this.baseImage,
       name,
       command: [
-        'python',
+        '/usr/local/bin/python',
         '/opt/harness-rsi/run-cowork-bench-verifier.py',
         '--judge', '/verifier/task/tests/judge.py',
         '--submission', '/submission',
