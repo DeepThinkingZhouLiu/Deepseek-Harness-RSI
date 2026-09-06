@@ -207,8 +207,8 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
     await this.docker.run({
       image: this.baseImage,
       name,
+      entrypoint: '/usr/local/bin/python',
       command: [
-        '/usr/local/bin/python',
         '/opt/harness-rsi/run-cowork-bench-verifier.py',
         '--judge', '/verifier/task/tests/judge.py',
         '--submission', '/submission',
