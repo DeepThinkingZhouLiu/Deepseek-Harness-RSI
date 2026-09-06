@@ -2,6 +2,8 @@
 
 工作区为 `.WorkTrees/016-fix-solver-failure-feedback`，分支 `fix/solver-failure-feedback`，基点 `9678e3e4d2ae881890bbfbab9a5b3375db686e5e`。本任务没有修改 014、共享 H0、正式实验的进程、状态或结果；没有 push、merge、PR，也没有派生开发代理。真实实验使用本会话的前台命令，不是 detached 任务。
 
+以下为前次实现的历史记录，其中“最终版”指 `c0a3a65a42`；主进程后续修复及真实验证以 [主进程收尾记录](solver-failure-feedback-main-review.zh.md) 为准。
+
 **基线与离线验证**
 
 使用项目专用环境 `/mnt/bn/liuzhou-hl-training/liuzhou/conda_envs/deepseek-harness-rsi` 的 Node。Python fixture 只使用 stdlib；未安装系统 Python 依赖。安装命令为 `npm install --ignore-scripts --package-lock=false`；linked worktree 补齐固定 DSH 子模块后，基线为 456/456。

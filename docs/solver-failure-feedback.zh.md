@@ -24,7 +24,7 @@ MSA 通过宿主私有 CID 文件关联 `docker inspect .State`，在清理容�
 - `solver_failures` 保存独立失败记录；任务状态和 reward 仍描述 rubric 结果。旧记录无此字段或为 null 时按空数组处理，非终态错误不能写成已评分记录。
 - Policy 的 `gates.safety.maximumSolverFailures` 默认 0，即运行失败默认禁止晋升；显式设置 null 可关闭此 Gate。已有 rubric、质量 Gate 和安全 Gate 不改。
 - 下一轮 Feedback 包含当前 mutation parent 的训练反馈，加同 Branch 最近被拒绝 Candidate 的独立证据。证据保留原 ID/digest/parent、逐题失败、受控代码片段和文件摘要；非法 Mutation Report 也会保存候选与拒绝证据。
-- 单个被拒绝 Candidate 的输入证据上限 128 KiB；代码最多 8 个文件、合计约 48 KiB，每个失败病例最多保留最近 8 个请求元信息。完整可信诊断留在该 Trial 的 Controller 产物中。
+- 单个被拒绝 Candidate 的证据文件按实际带缩进/换行的落盘格式限制为 128 KiB，容量不足时优先保留运行失败病例；代码最多 8 个文件、合计约 48 KiB，每个失败病例最多保留最近 8 个请求元信息。完整可信诊断留在该 Trial 的 Controller 产物中。
 - Selection 不向 Updater 提供逐题请求、Instance ID 或路径，只提供既有聚合计数及原候选代码。Final 逐题数据不参与失败反馈；其他 Branch 的共享历史不携带这些独立病例。
 
 **结算与 Resume**
@@ -46,3 +46,5 @@ MSA 通过宿主私有 CID 文件关联 `docker inspect .State`，在清理容�
 真实 smoke 配置及日志位于本 worktree `.rsi/failure-feedback-smoke/`，训练仅使用原 Feedback 的 `officeval_003`，总候选预算 2，单 Branch/单 Trial；Solver 为 Terra/high，官方 Codex 0.153.4 Updater 为 Terra/xhigh。Benchmark 显式设置 `finalEvaluation: disabled`，Final 为空且 Finalizer 会拒绝领取 Final Attempt。独立网关镜像为 `harness-rsi/model-gateway:failure-feedback-smoke-v1`，没有修改正式网关 Tag。
 
 真实闭环是否遇到可修复失败、Updater 是否实际修改 L3、以及分数是否提升，必须分别报告；离线注入修复不能冒充真实进化结果。最终结果和版本边界见 [验证记录](solver-failure-feedback-validation.zh.md)。
+
+主进程后续完成了独立单题 B2 真实检查：H0/g001/g002 的 Reward 分别为 0/0/0.333333，g002 晋升。这次使用 3 步的工程检查配置，不是正式 12 步成绩；实际改动只有 Agent/Prompt，没有改 `model.py`。随后补齐了长反馈文件可读回的边界，完整版本与证据说明见 [主进程收尾记录](solver-failure-feedback-main-review.zh.md)。
