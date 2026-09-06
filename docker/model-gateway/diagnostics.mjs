@@ -6,8 +6,14 @@ const MAXIMUM_LINE_BYTES = 4 * 1024 * 1024
 
 function contentBytes(value) {
   if (typeof value === 'string') return Buffer.byteLength(value)
-  if (Array.isArray(value)) return value.reduce((sum, entry) => sum + contentBytes(entry?.text), 0)
+  if (Array.isArray(value)) return value.reduce((sum, entry) => sum
+    + (typeof entry?.text === 'string' ? Buffer.byteLength(entry.text) : 0), 0)
   return 0
+}
+
+function hasContent(value) {
+  return typeof value === 'string' ? value.trim().length > 0
+    : Array.isArray(value) && value.some((entry) => typeof entry?.text === 'string' && entry.text.trim().length > 0)
 }
 
 function safeRequestId(value) {
@@ -86,6 +92,10 @@ export function responseObserver(record, { secretValues = [] } = {}) {
   const decoder = new StringDecoder('utf8')
   let buffer = ''
   let overflow = false
+  let deltaBytes = 0
+  let deltaHasContent = false
+  let messageBytes = 0
+  let messageHasContent = false
   function inspect(line) {
     if (!line.startsWith('data:')) return
     const raw = line.slice(5).trim()
@@ -94,16 +104,37 @@ export function responseObserver(record, { secretValues = [] } = {}) {
     let value
     try { value = JSON.parse(raw) } catch { record.malformedEvents += 1; return }
     if (value?.error) record.streamError = true
-    for (const choice of Array.isArray(value?.choices) ? value.choices : []) {
-      if (!choice || typeof choice !== 'object') continue
-      const output = choice.delta ?? choice.message ?? {}
-      record.contentBytes += contentBytes(output.content)
-      record.hasFinalContent ||= typeof output.content === 'string'
-        ? output.content.trim().length > 0
-        : Array.isArray(output.content) && output.content.some((entry) => typeof entry?.text === 'string' && entry.text.trim())
-      record.sawReasoning ||= contentBytes(output.reasoning_content) > 0
-      record.sawToolCalls ||= Array.isArray(output.tool_calls) && output.tool_calls.length > 0
-      record.sawRefusal ||= contentBytes(output.refusal) > 0
+    if (!Array.isArray(value?.choices)) {
+      if (!value?.error) record.malformedEvents += 1
+      return
+    }
+    // 当前请求只允许单回答；不能用另一个 choice 的正文证明第一个回答可用。
+    if (value.choices.length > 1) record.malformedEvents += 1
+    for (const choice of value.choices.slice(0, 1)) {
+      if (!choice || typeof choice !== 'object' || Array.isArray(choice)) {
+        record.malformedEvents += 1
+        continue
+      }
+      const outputs = [choice.delta, choice.message].map((output) => {
+        if (output == null) return {}
+        if (typeof output !== 'object' || Array.isArray(output)) { record.malformedEvents += 1; return {} }
+        return output
+      })
+      const [delta, message] = outputs
+      deltaBytes += contentBytes(delta.content)
+      deltaHasContent ||= hasContent(delta.content)
+      if (contentBytes(message.content) > 0) {
+        messageBytes = contentBytes(message.content)
+        messageHasContent = hasContent(message.content)
+      }
+      // 与 H0 的解析契约一致：没有 delta 正文时才使用最终完整 message，避免重复计数。
+      record.contentBytes = deltaBytes || messageBytes
+      record.hasFinalContent = deltaBytes > 0 ? deltaHasContent : messageHasContent
+      for (const output of outputs) {
+        record.sawReasoning ||= contentBytes(output.reasoning_content) > 0
+        record.sawToolCalls ||= Array.isArray(output.tool_calls) && output.tool_calls.length > 0
+        record.sawRefusal ||= contentBytes(output.refusal) > 0
+      }
       if (['stop', 'length', 'tool_calls', 'content_filter', 'function_call'].includes(choice.finish_reason)) {
         record.finishReason = choice.finish_reason
       }

@@ -359,6 +359,7 @@ export async function runMsaMinimalCoworkSolver({
     runAsCurrentUser: true,
     readOnlyRoot: true,
     capabilities: [],
+    captureExecutionEvidence: true,
     timeoutMs,
   }).catch((error) => {
     error.solverProcess = solverProcessEvidence(error.processResult)

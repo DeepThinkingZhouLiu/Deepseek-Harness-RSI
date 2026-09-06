@@ -110,6 +110,46 @@ test('同版本 Node 二进制实际内容变化会拒绝恢复；新旧 Final �
   assert.notEqual(evolutionFingerprint({ ...input, executionIdentity: null }), evolutionFingerprint(input))
 })
 
+test('启动证据区分零请求代码崩溃、真实 OOM 与伪造特殊退出码', () => {
+  const containerState = { source: 'docker-state', started: true, finished: true,
+    launchError: false, oomKilled: false, exitCode: 1 }
+  const classify = (state, exitCode = 1, requests = []) => classifySolverFailure({
+    diagnostics: { complete: true, requests },
+    process: solverProcessEvidence({ exitCode, containerState: state }),
+  })
+  assert.equal(classify(containerState).category, 'candidate')
+  for (const exitCode of [125, 126, 127, 137]) {
+    assert.equal(classify({ ...containerState, exitCode }, exitCode).category, 'candidate')
+    assert.equal(classify(null, exitCode).category, 'unknown')
+  }
+  assert.equal(classify({ ...containerState, oomKilled: true }).category, 'trusted-runtime')
+  assert.equal(classify({ ...containerState, launchError: true, started: false }).category, 'trusted-runtime')
+  assert.equal(classify({ ...containerState, finished: false }).category, 'unknown')
+  assert.equal(classify({ ...containerState, exitCode: 0 }).category, 'unknown')
+  assert.equal(classify(containerState, 1, [{ ...valid, httpStatus: 502 }]).category, 'provider')
+})
+
+test('诊断识别最终 message 回退；畸形流不会被尾部正常回答洗成 Candidate 故障', () => {
+  function observe(choices) {
+    const record = { ...valid, contentBytes: 0, responseBytes: 0, malformedEvents: 0, hasFinalContent: false }
+    const observer = responseObserver(record)
+    for (const value of choices) observer.chunk(Buffer.from(`data: ${JSON.stringify({ choices: value })}\n\n`))
+    observer.chunk(Buffer.from('data: [DONE]\n\n'))
+    observer.end()
+    return record
+  }
+  const final = [{ delta: {}, message: { content: '正文' }, finish_reason: 'stop' }]
+  const message = observe([final])
+  assert.equal(message.contentBytes, Buffer.byteLength('正文'))
+  assert.equal(message.hasFinalContent, true)
+  assert.equal(observe([[{ delta: { content: '部分' } }], final]).contentBytes, Buffer.byteLength('部分'))
+  for (const malformed of [{ broken: true }, [null], [{ delta: 'broken' }], [{}, {}]]) {
+    const record = observe([malformed, final])
+    assert.ok(record.malformedEvents > 0)
+    assert.equal(classifySolverFailure({ process: processEvidence, diagnostics: { complete: true, requests: [record] } }).category, 'unknown')
+  }
+})
+
 test('真实 Git 提交未提交过但执行内容相同的配置不会改变执行指纹', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rsi-execution-git-'))
   const dependencyRoot = join(root, 'fixture-dependency')

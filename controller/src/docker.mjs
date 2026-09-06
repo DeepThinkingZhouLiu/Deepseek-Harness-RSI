@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { isAbsolute } from 'node:path'
 import { ProtocolError } from './protocol.mjs'
 import { runProcess, secretValuesFromEnvironment } from './process.mjs'
+import { createDockerExecutionEvidence } from './docker-execution-evidence.mjs'
 
 function safeDockerName(value) {
   const normalized = value.toLowerCase().replace(/[^a-z0-9_.-]+/gu, '-').replace(/^-+|-+$/gu, '')
@@ -291,9 +292,11 @@ export class DockerClient {
       timeoutMs = this.resources.timeoutSeconds * 1000,
       resources = this.resources,
       input,
+      captureExecutionEvidence = false,
     } = options
     if (network === 'host') throw new ProtocolError('安全策略禁止 Docker host 网络')
     if (typeof hostGateway !== 'boolean') throw new ProtocolError('Docker hostGateway 必须是布尔值')
+    if (typeof captureExecutionEvidence !== 'boolean') throw new ProtocolError('Docker captureExecutionEvidence 必须是布尔值')
     if (
       entrypoint !== null &&
       (typeof entrypoint !== 'string' || entrypoint.length === 0 || entrypoint.startsWith('-') || /[\u0000-\u001f\u007f]/u.test(entrypoint))
@@ -303,7 +306,7 @@ export class DockerClient {
     const containerName = safeDockerName(name)
     const args = [
       'run',
-      '--rm',
+      ...(captureExecutionEvidence ? [] : ['--rm']),
       '--name',
       containerName,
       '--label',
@@ -352,9 +355,11 @@ export class DockerClient {
     }
     if (workdir) args.push('--workdir', workdir)
     if (entrypoint) args.push('--entrypoint', entrypoint)
+    const evidence = captureExecutionEvidence ? await createDockerExecutionEvidence(this.binary) : null
+    if (evidence) args.push(...evidence.args)
     args.push(image, ...command)
     try {
-      return await runProcess(this.binary, args, {
+      const result = await runProcess(this.binary, args, {
         timeoutMs,
         maxOutputBytes: 16 * 1024 * 1024,
         input,
@@ -364,13 +369,22 @@ export class DockerClient {
           ...secretValuesFromEnvironment(inheritEnvironment),
         ],
       })
+      if (evidence) result.containerState = await evidence.capture()
+      return result
     } catch (error) {
+      if (evidence) {
+        const containerState = await evidence.capture()
+        if (error.processResult) error.processResult.containerState = containerState
+        throw error
+      }
       try {
         await this.removeContainer(containerName)
       } catch {
         // 保留原始运行错误；清理失败不会把根因覆盖掉。
       }
       throw error
+    } finally {
+      if (evidence) await evidence.cleanup()
     }
   }
 }

@@ -36,6 +36,10 @@ export function classifySolverFailure({ context = {}, process: processEvidence =
   const requests = diagnostics?.requests ?? []
   let category = 'unknown'
   let code = 'insufficient-trusted-evidence'
+  const container = processEvidence?.containerState?.source === 'docker-state' ? processEvidence.containerState : null
+  const containerExited = container?.started === true && container.finished === true
+    && container.launchError === false && container.oomKilled === false
+    && container.exitCode === processEvidence?.exitCode
   // 非 Candidate 发出的 HTTP/认证故障优先于进程退出，不能被伪造的 Python Trace 覆盖。
   const last = requests.at(-1)
   if (diagnostics?.complete === true && last?.origin === 'gateway-request'
@@ -62,14 +66,14 @@ export function classifySolverFailure({ context = {}, process: processEvidence =
     // 同题并发或先失败后成功时，最后一个响应不能证明哪个请求导致进程退出。
     code = 'mixed-request-outcomes'
   } else if (processEvidence?.timedOut || processEvidence?.signal
-      || [125, 126, 127, 137].includes(processEvidence?.exitCode)) {
+      || container?.launchError || container?.oomKilled) {
     category = 'trusted-runtime'
     code = 'container-or-resource-failure'
   } else if (diagnostics?.complete === true
       && processEvidence?.source === 'trusted-process'
       && Number.isInteger(processEvidence.exitCode)
       && processEvidence.exitCode >= 0
-      && (requests.length > 0 || (processEvidence.exitCode === 0 && processEvidence.outputContractFailed))
+      && (requests.length > 0 || containerExited || (processEvidence.exitCode === 0 && processEvidence.outputContractFailed))
       && (processEvidence.exitCode !== 0 || processEvidence.outputContractFailed)) {
     category = 'candidate'
     code = processEvidence.outputContractFailed ? 'solver-output-contract' : 'candidate-process-exit'
@@ -117,6 +121,7 @@ export function solverProcessEvidence(result, { outputContractFailed = false } =
     timedOut: result.timedOut === true,
     outputTruncated: result.outputTruncated === true,
     outputContractFailed,
+    containerState: result.containerState ?? null,
     frames: [...stderr.matchAll(/File "(\/candidate\/[A-Za-z0-9_./-]+\.py)", line (\d+)/gu)]
       .slice(-16).map((match) => ({ path: match[1], line: Number(match[2]) })),
     exceptionTypes: [...stderr.matchAll(/^(?:[A-Za-z_][A-Za-z0-9_]*\.)*([A-Za-z][A-Za-z0-9]*(?:Error|Exception)):/gmu)]
