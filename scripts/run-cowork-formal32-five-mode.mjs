@@ -317,6 +317,10 @@ async function runCampaign(campaign) {
     }
     await updateCampaign(campaign.mode, { status: 'RUNNING', action })
     const result = await runController(campaign, action)
+    if (result.code === 3) {
+      await updateCampaign(campaign.mode, { status: 'BLOCKED_INCOMPATIBLE', action })
+      throw new Error(`${campaign.mode} 执行或配置内容不兼容，停止自动重试；请查看该 Mode 日志`)
+    }
     const after = await readCampaignState(campaign)
     if (after?.status === 'CLOSED') continue
     if (after?.status === 'PAUSED_INFRASTRUCTURE') {

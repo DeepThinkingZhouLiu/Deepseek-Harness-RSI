@@ -18,6 +18,7 @@ import { safeDockerName } from '../docker.mjs'
 import { withGlobalPermit } from '../global-concurrency.mjs'
 import { ProtocolError, validateResultRecords } from '../protocol.mjs'
 import { runProcess } from '../process.mjs'
+import { SolverFailure, SOLVER_FAILURE_PROTOCOL } from '../solver-failure.mjs'
 import {
   commitTrialCheckpoint,
   inspectTrialCheckpoint,
@@ -411,6 +412,7 @@ function recordForTask({ layout, partition, trials, runRoot, feedbackLimit }) {
       : {}),
     latency_ms: trials.reduce((sum, trial) => sum + trial.latencyMs, 0),
     policy_violations: violations,
+    solver_failures: trials.flatMap((trial) => trial.solverFailure ? [trial.solverFailure] : []),
     artifacts: trials.map((trial) => ({
       seed: trial.seed,
       root: relative(runRoot, trial.trialRoot).replaceAll('\\', '/'),
@@ -422,7 +424,9 @@ function recordForTask({ layout, partition, trials, runRoot, feedbackLimit }) {
       taskInstruction: compactText(layout.task.instruction, feedbackLimit),
       solverAnswer: compactText(trials.map((trial) => trial.solverAnswer).join('\n\n'), feedbackLimit),
       verifierFeedback: compactText(trials.map((trial) => trial.verifierFeedback).join('\n\n'), feedbackLimit),
-      errors: [],
+      errors: trials.filter((trial) => trial.solverFailure).map((trial) => (
+        `${trial.solverFailure.category}: ${trial.solverFailure.code}`
+      )),
     }
   }
   return record
@@ -563,6 +567,10 @@ export class OmegaUseOfficeValEnvironment {
     this.baseImage = tag
     this.solverImage = runtime.image
     this.runtimeRevision = digest
+    this.runtimeIdentity = {
+      definitionDigest: digest, baseImageId: identity,
+      solverImageId: await this.docker.imageId(runtime.image),
+    }
     return { baseImage: tag, solverImage: runtime.image }
   }
 
@@ -626,7 +634,7 @@ export class OmegaUseOfficeValEnvironment {
     return await readResult(output)
   }
 
-  async runTrial({ candidateId, candidateWorkspace, layout, model, partition, seed, trialIndex, executionId }) {
+  async runTrial({ candidateId, candidateDigest, candidateWorkspace, layout, model, partition, seed, trialIndex, executionId }) {
     const trialRoot = join(
       this.runRoot,
       'trials',
@@ -649,6 +657,7 @@ export class OmegaUseOfficeValEnvironment {
     const instruction = trustedTaskInstruction(layout.task, layout.inputs.map((input) => input.name))
     const startedAt = Date.now()
     let solver
+    let solverFailure = null
     try {
       solver = await withGlobalPermit('solver', () => this.solverDriver.run({
         image: runtime.solverImage,
@@ -661,14 +670,24 @@ export class OmegaUseOfficeValEnvironment {
         name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-solver`,
         timeoutMs: this.environment.docker.resources.timeoutSeconds * 1000,
         containerWorkspace: this.environment.task.workspacePath,
+        trialContext: { candidateId, candidateDigest, partition, instanceId: layout.instanceId, seed },
       }))
     } catch (cause) {
-      throw new ProtocolError('OmegaUse Solver 基础设施失败', [
-        cause?.message ?? String(cause),
-        ...(cause?.details ?? []),
-        `candidate=${candidateId}`,
-        `task=${layout.instanceId}`,
-      ])
+      if (cause instanceof SolverFailure) {
+        await writeFile(join(trialRoot, 'solver-failure.json'), `${JSON.stringify(cause.failure, null, 2)}\n`, {
+          encoding: 'utf8', mode: 0o600, flag: 'wx',
+        })
+        if (!cause.failure.terminal || this.environment.solverFailurePolicy === 'pause') throw cause
+        solverFailure = cause.failure
+        solver = { answer: '', modelUsage: cause.modelUsage }
+      } else {
+        throw new ProtocolError('OmegaUse Solver 基础设施失败', [
+          cause?.message ?? String(cause),
+          ...(cause?.details ?? []),
+          `candidate=${candidateId}`,
+          `task=${layout.instanceId}`,
+        ])
+      }
     }
 
     let artifacts = []
@@ -704,12 +723,16 @@ export class OmegaUseOfficeValEnvironment {
           name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-verifier`,
         })
       } catch (cause) {
-        throw new ProtocolError('OmegaUse Verifier 基础设施失败', [
-          cause?.message ?? String(cause),
-          ...(cause?.details ?? []),
-          `candidate=${candidateId}`,
-          `task=${layout.instanceId}`,
-        ])
+        const failure = {
+          protocol: SOLVER_FAILURE_PROTOCOL, category: 'trusted-runtime',
+          code: 'verifier-infrastructure', terminal: false,
+          context: { candidateId, candidateDigest, partition, instanceId: layout.instanceId, seed },
+          process: null, diagnostics: null,
+        }
+        await writeFile(join(trialRoot, 'verifier-failure.json'), `${JSON.stringify(failure, null, 2)}\n`, {
+          encoding: 'utf8', mode: 0o600, flag: 'wx',
+        })
+        throw new SolverFailure(failure, { modelUsage: solver.modelUsage })
       }
     }
     const reward = normalizeOmegaUseVerifierReward(result)
@@ -730,6 +753,7 @@ export class OmegaUseOfficeValEnvironment {
       policyViolations: policyViolation ? [policyViolation] : [],
       artifacts,
       trialRoot,
+      solverFailure,
     }
   }
 
@@ -775,6 +799,8 @@ export class OmegaUseOfficeValEnvironment {
             protocol: this.environment.protocol,
             sourceRevision: this.sourceRevision,
             runtimeRevision: this.runtimeRevision,
+            solverFailureProtocol: SOLVER_FAILURE_PROTOCOL,
+            solverFailurePolicy: this.environment.solverFailurePolicy ?? 'verified-candidate-terminal-v1',
           },
           solver: {
             id: this.solverDriver.id,
@@ -855,6 +881,7 @@ export class OmegaUseOfficeValEnvironment {
             for (const [trialIndex, seed] of seeds.entries()) {
               trials.push(await this.runTrial({
                 candidateId,
+                candidateDigest,
                 candidateWorkspace: candidate,
                 layout,
                 model,

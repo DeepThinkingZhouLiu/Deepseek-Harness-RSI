@@ -177,6 +177,7 @@ function summarizeRun(recordMap, instanceIds, confidence) {
       instances: policyViolationInstances,
       count: policyViolationCount,
     },
+    solverFailures: records.reduce((sum, record) => sum + (record.solverFailures?.length ?? 0), 0),
   }
 }
 
@@ -440,6 +441,16 @@ function applyPolicy(partitionReport, policy, evolutionLedger) {
   }
 
   const maximumPolicyViolations = policy.gates.safety.maximumPolicyViolations
+  const maximumSolverFailures = policy.gates.safety.maximumSolverFailures
+  if (maximumSolverFailures !== null && maximumSolverFailures !== undefined) {
+    gates.push(gate(
+      'maximum-solver-failures',
+      partitionReport.candidate.solverFailures <= maximumSolverFailures,
+      partitionReport.candidate.solverFailures,
+      '<=', maximumSolverFailures,
+      '已评测产物保留原始 Rubric 分数，运行失败另按冻结 Gate 决定晋升',
+    ))
+  }
   gates.push(
     gate(
       'maximum-policy-violations',

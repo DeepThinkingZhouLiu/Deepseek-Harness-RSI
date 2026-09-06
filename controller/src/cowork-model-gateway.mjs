@@ -58,12 +58,15 @@ export function diffModelUsage(before, after) {
 async function gatewayDefinition(repositoryRoot, dockerfile) {
   const dockerfilePath = resolve(repositoryRoot, dockerfile)
   const serverPath = resolve(repositoryRoot, 'docker/model-gateway/server.mjs')
+  const diagnosticsPath = resolve(repositoryRoot, 'docker/model-gateway/diagnostics.mjs')
   let dockerfileSource
   let serverSource
+  let diagnosticsSource
   try {
-    [dockerfileSource, serverSource] = await Promise.all([
+    [dockerfileSource, serverSource, diagnosticsSource] = await Promise.all([
       readFile(dockerfilePath),
       readFile(serverPath),
+      readFile(diagnosticsPath),
     ])
   } catch (error) {
     throw new ProtocolError('Model Gateway 镜像定义不可读', [error.message])
@@ -73,6 +76,7 @@ async function gatewayDefinition(repositoryRoot, dockerfile) {
     .update(dockerfileSource)
     .update('\0server.mjs\0')
     .update(serverSource)
+    .update('\0diagnostics.mjs\0').update(diagnosticsSource)
     .digest('hex')
   return {
     digest,
@@ -91,7 +95,10 @@ async function ensureModelGatewayImage({ config, docker, repositoryRoot, definit
     const version = await docker.imageLabel(config.image, GATEWAY_VERSION_LABEL)
     if (definitionDigest === null && version === GATEWAY_VERSION) {
       const imageServerDigest = await docker.imageFileDigest(config.image, '/app/server.mjs')
-      if (imageServerDigest === definition.serverDigest) return config.image
+      // 新版依赖 diagnostics.mjs；旧单文件镜像不能仅凭 server 摘要复用。
+      if (imageServerDigest === definition.serverDigest
+          && await docker.imageFileDigest(config.image, '/app/diagnostics.mjs')
+            === createHash('sha256').update(await readFile(resolve(repositoryRoot, 'docker/model-gateway/diagnostics.mjs'))).digest('hex')) return config.image
     }
   }
 
@@ -425,6 +432,43 @@ export class ModelGateway {
       throw new ProtocolError('Model Gateway Usage 响应不是合法 JSON', [error.message])
     }
     return validateUsageSnapshot(value)
+  }
+
+  async trialControl(body) {
+    const url = `http://127.0.0.1:${this.config.port}/rsi/trials`
+    const script = [
+      `const response = await fetch(${JSON.stringify(url)}, {`,
+      "method: 'POST', headers: { authorization: `Bearer ${process.env.GATEWAY_CONTROL_TOKEN}`, 'content-type': 'application/json' },",
+      `body: ${JSON.stringify(JSON.stringify(body))},`,
+      '})',
+      "if (!response.ok) throw new Error(`trial endpoint returned ${response.status}`)",
+      'process.stdout.write(JSON.stringify(await response.json()))',
+    ].join('\n')
+    const result = await this.docker.exec({
+      container: this.container.name,
+      command: ['node', '--input-type=module', '--eval', script],
+      secretValues: [],
+    })
+    return JSON.parse(result.stdout)
+  }
+
+  async beginTrial(context, policy) {
+    const access = await this.access('solver', policy)
+    const value = await this.trialControl(context)
+    if (value.trialId !== context.trialId || !ROLE_TOKEN_PATTERN.test(value.token ?? '')) {
+      throw new ProtocolError('Model Gateway Trial 身份响应无效')
+    }
+    return {
+      ...access,
+      secretEnvironment: { [this.config.upstreamApiKeyEnvironment]: value.token },
+    }
+  }
+
+  async endTrial(trialId) {
+    const value = await this.trialControl({ trialId, close: true })
+    if (value.context?.trialId !== trialId || !Array.isArray(value.requests)
+        || typeof value.complete !== 'boolean') throw new ProtocolError('Model Gateway Trial 诊断无效')
+    return { ...value, usage: validateUsageSnapshot(value.usage) }
   }
 
   async stop() {

@@ -165,7 +165,7 @@ test('Model Gateway 并发准备只构建一次且绑定定义摘要', async () 
   assert.equal(calls[0].labels['io.harness-rsi.model-gateway'], 'v1')
 })
 
-test('Model Gateway 可复用服务文件一致的旧 v1 镜像', async () => {
+test('Model Gateway 拒绝复用缺少新版诊断模块的旧 v1 镜像', async () => {
   let builds = 0
   const docker = {
     async imageExists() { return true },
@@ -183,7 +183,7 @@ test('Model Gateway 可复用服务文件一致的旧 v1 镜像', async () => {
     docker,
     repositoryRoot: REPOSITORY_ROOT,
   })
-  assert.equal(builds, 0)
+  assert.equal(builds, 1)
 })
 
 test('Model Gateway Usage 差分会把未知响应标成不完整', () => {

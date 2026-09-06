@@ -817,7 +817,7 @@ function validateTextReasoningEnvironment({ id, spec, protocol }) {
 function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
   rejectUnknownConfiguration(
     spec,
-    new Set(['protocol', 'source', 'task', 'runtime', 'docker', 'modelGateway', 'verifier', 'reward', 'feedback']),
+    new Set(['protocol', 'source', 'task', 'runtime', 'docker', 'modelGateway', 'verifier', 'reward', 'feedback', 'solverFailurePolicy']),
     'EnvironmentAdapter.spec',
   )
   const source = expectObject(spec.source, 'EnvironmentAdapter.spec.source')
@@ -832,6 +832,10 @@ function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
   const verifierResources = expectObject(verifier.resources, 'EnvironmentAdapter.spec.verifier.resources')
   const reward = expectObject(spec.reward, 'EnvironmentAdapter.spec.reward')
   const feedback = expectObject(spec.feedback, 'EnvironmentAdapter.spec.feedback')
+  const solverFailurePolicy = spec.solverFailurePolicy ?? 'verified-candidate-terminal-v1'
+  if (!['pause', 'verified-candidate-terminal-v1'].includes(solverFailurePolicy)) {
+    throw new ProtocolError('EnvironmentAdapter.spec.solverFailurePolicy 无效')
+  }
 
   rejectUnknownConfiguration(
     source,
@@ -1011,6 +1015,7 @@ function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
     kind: 'EnvironmentAdapter',
     id,
     protocol,
+    solverFailurePolicy,
     source: {
       datasetRootEnvironment,
       evaluatorRootEnvironment,

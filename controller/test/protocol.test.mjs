@@ -42,6 +42,21 @@ test('Benchmark 允许训练集内晋升协议显式省略 Selection', () => {
   assert.deepEqual(benchmark.partitions.selection.instanceIds, [])
 })
 
+test('显式禁用 Final 的最小训练 smoke 可以只有一道反馈题，默认协议仍要求 Final', () => {
+  const fixture = benchmarkFixture()
+  fixture.spec.finalEvaluation = 'disabled'
+  fixture.spec.partitions.selection.instanceIds = []
+  fixture.spec.partitions.final.instanceIds = []
+  fixture.spec.expectedTotal = 1
+  assert.equal(validateBenchmark(fixture).finalEvaluation, 'disabled')
+  delete fixture.spec.finalEvaluation
+  assert.throws(() => validateBenchmark(fixture))
+  fixture.spec.finalEvaluation = 'disabled'
+  fixture.spec.partitions.final.instanceIds = ['hidden-task']
+  fixture.spec.expectedTotal = 2
+  assert.throws(() => validateBenchmark(fixture))
+})
+
 test('Benchmark 校验拒绝跨 Partition 重复 Instance', () => {
   const fixture = benchmarkFixture()
   fixture.spec.partitions.final.instanceIds = ['repo__two-1']

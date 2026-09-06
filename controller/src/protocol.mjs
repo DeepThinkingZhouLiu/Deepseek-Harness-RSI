@@ -1,5 +1,6 @@
 import { lstat, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { validateSolverFailures } from './solver-failure.mjs'
 
 const API_VERSION = 'harness-rsi/v1alpha1'
 const PARTITION_NAMES = ['feedback', 'selection', 'final']
@@ -153,6 +154,8 @@ export function validateBenchmark(input) {
   const partitionsInput = isObject(spec.partitions) ? spec.partitions : {}
   const partitions = {}
   const allInstanceIds = new Set()
+  const finalEvaluation = spec.finalEvaluation ?? 'enabled'
+  if (!['enabled', 'disabled'].includes(finalEvaluation)) errors.push('spec.finalEvaluation 必须是 enabled 或 disabled')
 
   for (const partitionName of Object.keys(partitionsInput)) {
     if (!PARTITION_NAMES.includes(partitionName)) {
@@ -172,8 +175,9 @@ export function validateBenchmark(input) {
     }
 
     const instanceIds = partition.instanceIds
+    const emptyAllowed = partitionName === 'selection' || (partitionName === 'final' && finalEvaluation === 'disabled')
     if (!Array.isArray(instanceIds)
-        || (instanceIds.length === 0 && partitionName !== 'selection')) {
+        || (instanceIds.length === 0 && !emptyAllowed)) {
       errors.push(`${partitionPath}.instanceIds 必须是${partitionName === 'selection' ? '' : '非空'}数组`)
       partitions[partitionName] = { visibility: partition.visibility, instanceIds: [] }
       continue
@@ -195,7 +199,7 @@ export function validateBenchmark(input) {
     if (partition.expectedCount !== undefined) {
       pushNumber(errors, partition.expectedCount, `${partitionPath}.expectedCount`, {
         integer: true,
-        min: partitionName === 'selection' ? 0 : 1,
+        min: emptyAllowed ? 0 : 1,
       })
       if (Number.isInteger(partition.expectedCount) && partition.expectedCount !== instanceIds.length) {
         errors.push(`${partitionPath}.expectedCount 与 instanceIds 数量不一致`)
@@ -208,7 +212,10 @@ export function validateBenchmark(input) {
     }
   }
 
-  pushNumber(errors, spec.expectedTotal, 'spec.expectedTotal', { integer: true, min: 2 })
+  if (finalEvaluation === 'disabled' && partitions.final?.instanceIds.length > 0) {
+    errors.push('spec.finalEvaluation=disabled 时 final 必须为空，不得配置隐藏题')
+  }
+  pushNumber(errors, spec.expectedTotal, 'spec.expectedTotal', { integer: true, min: finalEvaluation === 'disabled' ? 1 : 2 })
   if (Number.isInteger(spec.expectedTotal) && spec.expectedTotal !== allInstanceIds.size) {
     errors.push(`spec.expectedTotal=${spec.expectedTotal}，但实际唯一 Instance 数量是 ${allInstanceIds.size}`)
   }
@@ -217,6 +224,7 @@ export function validateBenchmark(input) {
   return {
     id: metadata.id,
     name: metadata.name,
+    finalEvaluation,
     source: {
       adapter: source.adapter,
       dataset: source.dataset,
@@ -333,6 +341,10 @@ export function validateEvaluationPolicy(input) {
   )
 
   const safety = isObject(gates.safety) ? gates.safety : {}
+  const maximumSolverFailures = safety.maximumSolverFailures ?? (safety.maximumSolverFailures === null ? null : 0)
+  pushNumber(errors, maximumSolverFailures, 'spec.gates.safety.maximumSolverFailures', {
+    integer: true, min: 0, nullable: true,
+  })
   pushNumber(errors, safety.maximumPolicyViolations, 'spec.gates.safety.maximumPolicyViolations', {
     integer: true,
     min: 0,
@@ -368,7 +380,7 @@ export function validateEvaluationPolicy(input) {
         maximumEvolutionCostUsd: cost.maximumEvolutionCostUsd,
       },
       performance: { maximumRelativeLatencyIncrease, maximumRelativeTokenIncrease },
-      safety: { maximumPolicyViolations: safety.maximumPolicyViolations },
+      safety: { maximumPolicyViolations: safety.maximumPolicyViolations, maximumSolverFailures },
     },
   }
 }
@@ -440,6 +452,13 @@ export function validateResultRecords(input, benchmark, label) {
     if (rawRecord.artifacts !== undefined && !Array.isArray(rawRecord.artifacts)) {
       errors.push(`${path}.artifacts 必须是数组`)
     }
+    let solverFailures = []
+    try {
+      solverFailures = validateSolverFailures(rawRecord.solver_failures)
+      if (solverFailures.some((failure) => !failure.terminal)) throw new Error('solver_failures 不得把未完成故障写成已评分终态')
+    } catch (error) {
+      errors.push(`${path}.${error.message}`)
+    }
 
     for (const metricName of ['cost_usd', 'input_tokens', 'output_tokens', 'latency_ms']) {
       if (rawRecord[metricName] !== undefined) {
@@ -469,6 +488,7 @@ export function validateResultRecords(input, benchmark, label) {
         outputTokens: rawRecord.output_tokens,
         latencyMs: rawRecord.latency_ms,
         policyViolations: rawRecord.policy_violations ?? [],
+        solverFailures,
         artifacts: rawRecord.artifacts ?? [],
         feedback: rawRecord.feedback,
       })

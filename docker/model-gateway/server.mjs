@@ -1,8 +1,9 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import http from 'node:http'
 import https from 'node:https'
 import { pipeline, Transform } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
+import { createTrialDiagnostics, responseObserver } from './diagnostics.mjs'
 
 const listenPort = Number(process.env.GATEWAY_PORT ?? '8080')
 const legacyToken = process.env.GATEWAY_TOKEN ?? ''
@@ -63,6 +64,8 @@ function tokenMatches(header, expectedToken) {
 
 function authorizedPrincipal(header) {
   if (tokenMatches(header, controlToken)) return { role: 'control' }
+  const trial = trialDiagnostics.principal(header)
+  if (trial) return trial
   if (tokenMatches(header, roleTokens.get('solver'))) return { role: 'solver' }
   if (tokenMatches(header, roleTokens.get('updater'))) return { role: 'updater' }
   if (tokenMatches(header, legacyToken)) return { role: 'legacy' }
@@ -141,6 +144,7 @@ function emptyUsage() {
 }
 
 const globalUsage = emptyUsage()
+const trialDiagnostics = createTrialDiagnostics({ emptyUsage, tokenMatches })
 const roleUsage = new Map([
   ['legacy', emptyUsage()],
   ['solver', emptyUsage()],
@@ -395,6 +399,28 @@ const server = http.createServer((request, response) => {
     return
   }
   const principal = authorizedPrincipal(request.headers.authorization)
+  if (requestUrl.pathname === '/rsi/trials') {
+    if (principal?.role !== 'control') {
+      send(response, 401, { error: 'unauthorized' })
+      request.resume()
+      return
+    }
+    if (request.method === 'POST') {
+      readControlBody(request).then((body) => {
+        const value = JSON.parse(body.toString('utf8'))
+        const result = value.close === true
+          ? trialDiagnostics.snapshot(value.trialId, true)
+          : trialDiagnostics.register(value)
+        send(response, result ? 200 : 409, result ?? { error: 'invalid_or_active_trial' })
+      }).catch(() => {
+        if (!response.headersSent) send(response, 400, { error: 'invalid_trial' })
+      })
+    } else {
+      send(response, 405, { error: 'method_not_allowed' })
+      request.resume()
+    }
+    return
+  }
   if (request.method === 'POST' && requestUrl.pathname === '/rsi/configure-role' && requestUrl.search === '') {
     if (principal?.role !== 'control') {
       send(response, 401, { error: 'unauthorized' })
@@ -463,6 +489,14 @@ const server = http.createServer((request, response) => {
     request.resume()
     return
   }
+  const diagnostic = trialDiagnostics.request(principal.trial)
+  response.once('finish', () => {
+    if (diagnostic && diagnostic.httpStatus === null) {
+      diagnostic.origin = 'gateway-control'
+      diagnostic.httpStatus = response.statusCode
+      diagnostic.responseComplete = true
+    }
+  })
   const policy = rolePolicies.get(principal.role)
   if (roleIsolationEnabled && principal.role !== 'legacy' && !policy) {
     send(response, 503, { error: 'role_policy_not_configured' })
@@ -492,7 +526,7 @@ const server = http.createServer((request, response) => {
     request.resume()
     return
   }
-  const counters = [globalUsage, roleUsage.get(principal.role)]
+  const counters = [globalUsage, roleUsage.get(principal.role), ...(principal.trial ? [principal.trial.usage] : [])]
   for (const counter of counters) {
     counter.acceptedRequests += 1
     counter.activeRequests += 1
@@ -538,8 +572,26 @@ const server = http.createServer((request, response) => {
     const payload = policy ? trustedRequestBody(rawBody, policy) : rawBody
     if (!payload) {
       recordUnknownUsage()
+      if (diagnostic) Object.assign(diagnostic, {
+        origin: 'gateway-request', httpStatus: 400, errorCode: 'invalid-json-request', responseComplete: true,
+      })
       send(response, 400, { error: 'invalid_json_request' })
       return
+    }
+    if (diagnostic) {
+      const parsed = JSON.parse(payload.toString('utf8'))
+      diagnostic.requestedTools = Array.isArray(parsed.tools) && parsed.tools.length > 0
+    }
+    // 同一 Trial 的完全相同请求共用总预算，避免 Candidate 空响应重试 × 网关网络重试。
+    // 首次请求之外最多 5 次重试；仅保存请求摘要，不保存消息或推理正文。
+    let retryBudget = null
+    if (principal.trial) {
+      const payloadDigest = createHash('sha256').update(payload).digest('hex')
+      retryBudget = principal.trial.retryBudgets.get(payloadDigest)
+      if (!retryBudget) {
+        retryBudget = { attempts: 0 }
+        principal.trial.retryBudgets.set(payloadDigest, retryBudget)
+      }
     }
     const target = upstreamUrl()
     const transport = target.protocol === 'https:' ? https : http
@@ -561,6 +613,17 @@ const server = http.createServer((request, response) => {
 
     const forward = (attempt) => {
       if (response.destroyed || response.writableEnded) return
+      if (retryBudget && retryBudget.attempts >= 6) {
+        if (diagnostic) Object.assign(diagnostic, {
+          origin: 'gateway-control', httpStatus: 429,
+          errorCode: 'identical-request-retry-budget-exhausted', responseComplete: true,
+        })
+        recordUnknownUsage()
+        send(response, 429, { error: 'identical_request_retry_budget_exhausted' })
+        return
+      }
+      if (retryBudget) retryBudget.attempts += 1
+      if (diagnostic) diagnostic.attempts = attempt
       let retryScheduled = false
       const scheduleRetry = (upstreamHeaders = {}) => {
         if (retryScheduled || response.destroyed || response.writableEnded) return false
@@ -574,6 +637,7 @@ const server = http.createServer((request, response) => {
       }
       const upstream = transport.request(target, { method: 'POST', headers }, (upstreamResponse) => {
         const status = upstreamResponse.statusCode ?? 502
+        if (diagnostic) diagnostic.statuses.push(status)
         if (retryableUpstreamStatuses.has(status) && attempt <= maximumUpstreamRetries) {
           // 只有在尚未向 Agent 下发 Header/Body 时才能重试，避免重播部分 Completion。
           // 429 遵守有界 Retry-After；其余故障使用指数退避和抖动。
@@ -584,6 +648,14 @@ const server = http.createServer((request, response) => {
           return
         }
         usageDelegated = true
+        if (diagnostic) {
+          const observer = responseObserver(diagnostic)
+          observer.headers(status, upstreamResponse.headers)
+          upstreamResponse.on('data', (chunk) => observer.chunk(chunk))
+          upstreamResponse.once('end', () => observer.end())
+          upstreamResponse.once('error', () => observer.error())
+          upstreamResponse.once('aborted', () => observer.error())
+        }
         response.writeHead(
           status,
           filteredHeaders(upstreamResponse.headers, responseHeaderAllowlist),
@@ -597,6 +669,10 @@ const server = http.createServer((request, response) => {
       upstream.setTimeout(20 * 60 * 1000, () => upstream.destroy(new Error('upstream timeout')))
       upstream.on('error', (error) => {
         if (scheduleRetry()) return
+        if (diagnostic) {
+          diagnostic.transportError = true
+          diagnostic.httpStatus ??= 502
+        }
         recordUnknownUsage()
         if (!response.headersSent) send(response, 502, { error: 'upstream_failure' })
         else response.destroy(error)

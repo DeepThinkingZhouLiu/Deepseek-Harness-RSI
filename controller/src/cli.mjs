@@ -402,7 +402,7 @@ main().catch((error) => {
   if (error instanceof ProtocolError) {
     process.stderr.write(`${error.message}\n`)
     for (const detail of error.details) process.stderr.write(`- ${detail}\n`)
-    process.exitCode = 2
+    process.exitCode = error.exitCode ?? 2
     return
   }
   process.stderr.write(`${error.stack ?? error.message}\n`)

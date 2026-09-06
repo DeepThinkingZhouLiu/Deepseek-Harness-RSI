@@ -80,7 +80,10 @@ export async function runProcess(command, args, options = {}) {
       }
       if (timedOut || !allowExitCodes.includes(code)) {
         const reason = timedOut ? `命令超时（${timeoutMs}ms）` : `命令退出码 ${code}`
-        reject(new ProtocolError(`${reason}：${command}`, [result.stderr.slice(-4000), result.stdout.slice(-2000)].filter(Boolean)))
+        const error = new ProtocolError(`${reason}：${command}`, [result.stderr.slice(-4000), result.stdout.slice(-2000)].filter(Boolean))
+        // 结构化退出观测供可信 Driver 使用，禁止调用方根据异常消息猜测退出码。
+        error.processResult = result
+        reject(error)
         return
       }
       resolve(result)

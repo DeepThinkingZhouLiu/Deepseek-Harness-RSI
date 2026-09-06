@@ -1,11 +1,12 @@
 import { constants as fsConstants } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, posix, relative, resolve } from 'node:path'
 
 import { diffModelUsage } from '../cowork-model-gateway.mjs'
 import { normalizeRelativePath } from '../path-policy.mjs'
 import { ProtocolError } from '../protocol.mjs'
+import { classifySolverFailure, SolverFailure, solverProcessEvidence } from '../solver-failure.mjs'
 
 export const MSA_COWORK_CONTAINER_PATHS = Object.freeze({
   candidate: '/candidate',
@@ -359,23 +360,31 @@ export async function runMsaMinimalCoworkSolver({
     readOnlyRoot: true,
     capabilities: [],
     timeoutMs,
+  }).catch((error) => {
+    error.solverProcess = solverProcessEvidence(error.processResult)
+    throw error
   })
 
-  let answer = await readBoundedRegularFile(answerPath, 'MSA Solver Answer', maximumAnswerBytes)
-  let trace = validateTrace(await readBoundedRegularFile(tracePath, 'MSA Solver Trace', maximumTraceBytes))
-  answer = redactExactSecret(answer, gateway.dummyKey).trim()
-  trace = redactExactSecret(trace, gateway.dummyKey)
-  if (!answer) throw new ProtocolError('MSA Solver Answer 去除空白后为空')
-  await Promise.all([
-    writeFile(answerPath, `${answer}\n`, { encoding: 'utf8', mode: 0o600 }),
-    writeFile(tracePath, trace, { encoding: 'utf8', mode: 0o600 }),
-  ])
-  return {
-    answer,
-    trace,
-    stderr: redactExactSecret(result.stderr ?? '', gateway.dummyKey),
-    durationMs: result.durationMs,
-    outputTruncated: result.outputTruncated ?? false,
+  try {
+    let answer = await readBoundedRegularFile(answerPath, 'MSA Solver Answer', maximumAnswerBytes)
+    let trace = validateTrace(await readBoundedRegularFile(tracePath, 'MSA Solver Trace', maximumTraceBytes))
+    answer = redactExactSecret(answer, gateway.dummyKey).trim()
+    trace = redactExactSecret(trace, gateway.dummyKey)
+    if (!answer) throw new ProtocolError('MSA Solver Answer 去除空白后为空')
+    await Promise.all([
+      writeFile(answerPath, `${answer}\n`, { encoding: 'utf8', mode: 0o600 }),
+      writeFile(tracePath, trace, { encoding: 'utf8', mode: 0o600 }),
+    ])
+    return {
+      answer,
+      trace,
+      stderr: redactExactSecret(result.stderr ?? '', gateway.dummyKey),
+      durationMs: result.durationMs,
+      outputTruncated: result.outputTruncated ?? false,
+    }
+  } catch (error) {
+    error.solverProcess = solverProcessEvidence(result, { outputContractFailed: true })
+    throw error
   }
 }
 
@@ -452,21 +461,47 @@ export function createMsaMinimalCoworkSolverDriver({
       const before = usageBatch === null ? await modelGateway.usage('solver') : null
       let result
       let operationError
+      let diagnostics = null
+      const trialContext = options.trialContext
+        ? { ...options.trialContext, trialId: randomUUID() }
+        : null
+      const policy = {
+        model: options.model.model,
+        maxTokens: options.model.maxTokens,
+        maxTokensField: provider.compatibility?.maxTokensField ?? 'max_tokens',
+        reasoningEffort: options.model.reasoningEffort ?? null,
+      }
+      const trialAccess = trialContext && modelGateway.beginTrial
+        ? await modelGateway.beginTrial(trialContext, policy)
+        : await modelGateway.access('solver', policy)
       try {
         result = await runMsaMinimalCoworkSolver({
           ...options,
           docker,
           runtime: target.solver.runtime,
           provider,
-          modelAccess: await modelGateway.access('solver', {
-            model: options.model.model,
-            maxTokens: options.model.maxTokens,
-            maxTokensField: provider.compatibility?.maxTokensField ?? 'max_tokens',
-            reasoningEffort: options.model.reasoningEffort ?? null,
-          }),
+          modelAccess: trialAccess,
         })
       } catch (error) {
         operationError = error
+      }
+      if (trialContext && modelGateway.endTrial) {
+        try {
+          diagnostics = await modelGateway.endTrial(trialContext.trialId)
+          const trialUsage = diffModelUsage({ ...usageAccumulator(), activeRequests: 0 }, diagnostics.usage)
+          if (operationError) operationError.modelUsage = trialUsage
+          else Object.assign(result, { modelUsage: trialUsage, diagnostics })
+        } catch (error) {
+          if (!operationError) operationError = error
+          diagnostics = null
+        }
+      }
+      if (operationError) {
+        operationError = new SolverFailure(classifySolverFailure({
+          context: trialContext ?? {},
+          process: operationError.solverProcess ?? null,
+          diagnostics,
+        }), { modelUsage: operationError.modelUsage })
       }
       if (usageBatch !== null) {
         if (operationError) throw operationError

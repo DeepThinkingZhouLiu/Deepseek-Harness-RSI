@@ -81,6 +81,17 @@ function sanitizedJson(value, secrets) {
   return JSON.parse(redact(JSON.stringify(value), secrets))
 }
 
+function boundedSolverFailures(input, secrets) {
+  return sanitizedJson((input ?? []).slice(-8).map((failure) => ({
+    ...failure,
+    diagnostics: failure.diagnostics ? {
+      ...failure.diagnostics,
+      requests: failure.diagnostics.requests.slice(-8),
+      omittedRequests: Math.max(0, failure.diagnostics.requests.length - 8),
+    } : null,
+  })), secrets)
+}
+
 function boundedArtifacts(input, maximumEntries, maximumBytes, secrets) {
   const trials = Array.isArray(input) ? sanitizedJson(input, secrets) : []
   const output = []
@@ -154,6 +165,7 @@ export function buildFeedbackPacket({
       trialRewards: record.trialRewards,
       ...textFields,
       policyViolations: record.policyViolations,
+      solverFailures: boundedSolverFailures(record.solverFailures, secretValues),
       // Result 协议允许未采集耗时；FeedbackPacket 必须始终保持纯 JSON，
       // 不能把 undefined 带入内容寻址或 BaselinePack。
       latencyMs: record.latencyMs ?? null,
