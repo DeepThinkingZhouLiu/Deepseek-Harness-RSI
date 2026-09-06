@@ -507,6 +507,12 @@ export function createMsaMinimalCoworkSolverDriver({
         if (operationError) throw operationError
         return result
       }
+      if (diagnostics) {
+        // 单次/并发直调也只累计自己的 Trial 用量，不能被角色级全局差值覆盖。
+        addUsage(measuredUsage, operationError?.modelUsage ?? result.modelUsage)
+        if (operationError) throw operationError
+        return result
+      }
       try {
         const usage = diffModelUsage(before, await modelGateway.usage('solver'))
         addUsage(measuredUsage, usage)

@@ -86,8 +86,8 @@ function boundedSolverFailures(input, secrets) {
     ...failure,
     diagnostics: failure.diagnostics ? {
       ...failure.diagnostics,
-      requests: failure.diagnostics.requests.slice(-8),
-      omittedRequests: Math.max(0, failure.diagnostics.requests.length - 8),
+      requests: (failure.diagnostics.requests ?? []).slice(-8),
+      omittedRequests: Math.max(0, (failure.diagnostics.requests ?? []).length - 8),
     } : null,
   })), secrets)
 }

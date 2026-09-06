@@ -690,6 +690,11 @@ export class OmegaUseOfficeValEnvironment {
       }
     }
 
+    if (solver.diagnostics) {
+      await writeFile(join(trialRoot, 'solver-diagnostics.json'), `${JSON.stringify(solver.diagnostics, null, 2)}\n`, {
+        encoding: 'utf8', mode: 0o600, flag: 'wx',
+      })
+    }
     let artifacts = []
     let policyViolation = null
     try {

@@ -5,7 +5,7 @@ import test from 'node:test'
 import { buildFeedbackPacket } from '../src/feedback.mjs'
 import { saveRejectedCandidateEvidence, loadRejectedCandidateEvidence } from '../src/failure-feedback.mjs'
 import { SolverFailure } from '../src/solver-failure.mjs'
-import { runtimeFixture, startFixtureGateway } from './fixtures/solver-failure-runtime.mjs'
+import { runtimeFixture, startFixtureGateway, failingRun } from './fixtures/solver-failure-runtime.mjs'
 
 async function partition(fixture, candidateId = 'h0') {
   const runRoot = join(fixture.root, 'run')
@@ -77,6 +77,46 @@ test('并发 A 可评测、B reasoning-only 暂停：不串题，不丢已提交
   assert.doesNotMatch(raw, /PRIVATE_REASONING_MUST_NOT_LEAK/u)
 })
 
+test('真实 Driver 启动后没有网关请求就退出保持 unknown，不能用 Candidate 自报类型定责', async (t) => {
+  const fixture = await runtimeFixture(t, { cases: ['valid'] })
+  await writeFile(join(fixture.candidate, 'run.py'), 'raise RuntimeError("candidate says this is a harness error")\n')
+  const { environment, options } = await partition(fixture)
+  await assert.rejects(environment.runCandidatePartition(options), (error) => error instanceof SolverFailure
+    && error.failure.category === 'unknown' && error.failure.process.exitCode === 1
+    && error.failure.diagnostics.complete === true && error.failure.diagnostics.requests.length === 0)
+  assert.equal(fixture.gateway.observed.length, 0)
+  assert.equal(fixture.verifierCalls(), 0)
+})
+
+test('不启用 Partition Usage Batch 的并发直调仍按 Trial 计量，不覆盖成全局差值', async (t) => {
+  const fixture = await runtimeFixture(t, { cases: ['valid', 'valid'] })
+  const { environment, options } = await partition(fixture)
+  const trials = await Promise.all(fixture.benchmark.partitions.feedback.instanceIds.map(async (instanceId) => (
+    environment.runTrial({ ...options, layout: await environment.taskLayout(instanceId),
+      seed: 1, trialIndex: 0, executionId: 'fixture-direct-trials' })
+  )))
+  assert.deepEqual(trials.map((trial) => trial.inputTokens), [5, 5])
+  assert.equal(environment.solverDriver.usage().requests, 2)
+  assert.equal(environment.solverDriver.usage().inputTokens, 10)
+})
+
+test('失败代码和改动列表在 JSON 转义后仍有严格字节上限', async (t) => {
+  const fixture = await runtimeFixture(t, { cases: ['valid'] })
+  for (const path of ['model.py', 'run.py', 'agent.py', 'tools.py']) {
+    await writeFile(join(fixture.candidate, path), '\u0001'.repeat(12 * 1024))
+  }
+  const reference = await saveRejectedCandidateEvidence({
+    runRoot: fixture.root, generation: 1, parentId: 'h0', partition: 'feedback', records: new Map(),
+    candidate: { id: 'g001-l3', digest: 'a'.repeat(64), workspace: fixture.candidate,
+      report: { changedFiles: ['model.py', 'run.py', 'agent.py', 'tools.py', ...Array.from({ length: 200 }, (_, i) => `file-${i}`)] } },
+    bundle: { ...fixture.bundle, benchmark: fixture.benchmark },
+  })
+  const evidence = await loadRejectedCandidateEvidence(fixture.root, reference)
+  assert.ok(Buffer.byteLength(JSON.stringify(evidence)) <= 128 * 1024)
+  assert.ok(evidence.omittedCodeFiles > 0)
+  assert.ok(evidence.omittedChangedFiles > 0)
+})
+
 test('真实网关的无契约 tool_calls / 401 / 429 / 502 / SSE 中断均不伪装为 Candidate 零分', async (t) => {
   for (const [mode, category] of [
     ['tools', 'unknown'], ['http401', 'trusted-runtime'], ['http429', 'provider'],
@@ -143,4 +183,22 @@ test('可信 Verifier 失败保持未完成，不将可用部分产物结算成�
   await assert.rejects(environment.runCandidatePartition(options), (error) => error instanceof SolverFailure
     && error.failure.category === 'trusted-runtime' && error.failure.code === 'verifier-infrastructure')
   await assert.rejects(readFile(options.outputPath), { code: 'ENOENT' })
+})
+
+test('进程成功退出但缺少 Trace 的输出协议错误同样可进化，空交付则按原 Verifier 规则计分', async (t) => {
+  for (const emptyArtifact of [false, true]) {
+    const fixture = await runtimeFixture(t)
+    let source = failingRun.replace('answer = json.loads(text)', 'answer = text')
+      .replace(/^Path\(a.trace\).write_text.*\n/mu, '')
+    if (emptyArtifact) source = source.replace(/^Path\('partial.xlsx'\).write_text.*\n/mu, '')
+    await writeFile(join(fixture.candidate, 'run.py'), source)
+    const { environment, options } = await partition(fixture)
+    const records = await environment.runCandidatePartition(options)
+    const failure = records.get('officeval_001').solverFailures[0]
+    assert.equal(failure.process.exitCode, 0)
+    assert.equal(failure.process.outputContractFailed, true)
+    assert.equal(failure.category, 'candidate')
+    assert.equal(records.get('officeval_001').reward, emptyArtifact ? 0 : 0.5)
+    assert.equal(fixture.verifierCalls(), 1)
+  }
 })

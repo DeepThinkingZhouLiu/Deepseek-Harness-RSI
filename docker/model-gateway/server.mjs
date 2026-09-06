@@ -649,7 +649,7 @@ const server = http.createServer((request, response) => {
         }
         usageDelegated = true
         if (diagnostic) {
-          const observer = responseObserver(diagnostic)
+          const observer = responseObserver(diagnostic, { secretValues: [apiKey, principal.trial?.token] })
           observer.headers(status, upstreamResponse.headers)
           upstreamResponse.on('data', (chunk) => observer.chunk(chunk))
           upstreamResponse.once('end', () => observer.end())

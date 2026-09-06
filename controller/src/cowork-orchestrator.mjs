@@ -58,7 +58,10 @@ import { resolveTargetSource } from './target-sources.mjs'
 import { PopulationOrchestrator } from './population-orchestrator.mjs'
 import { PopulationStore } from './population-store.mjs'
 import { acquireCampaignLock } from './campaign-lock.mjs'
-import { assertExecutionIdentity, captureExecutionIdentity, EXECUTION_PATHS, ResumeCompatibilityError } from './execution-identity.mjs'
+import {
+  assertExecutionIdentity, captureExecutionIdentity, captureRuntimeInputs,
+  evolutionFingerprint, EXECUTION_PATHS, ResumeCompatibilityError,
+} from './execution-identity.mjs'
 
 const MAXIMUM_STRATEGY_HISTORY_ENTRIES = 64
 
@@ -140,7 +143,7 @@ async function trustedControllerRevision(repositoryRoot) {
     { timeoutMs: 30_000 },
   )
   if (dirty.stdout.trim()) {
-    throw new ProtocolError('Controller 信任根必须先提交，再开始或继续实验', [dirty.stdout.trim()])
+    throw new ResumeCompatibilityError('Controller 信任根必须先提交，再开始或继续实验', [dirty.stdout.trim()])
   }
   return value
 }
@@ -771,6 +774,7 @@ export async function capturePopulationBundle(bundle, repositoryRoot) {
   const snapshot = {
     ...publicBundleSnapshot(bundle),
     trustedInputs: {
+      ...await captureRuntimeInputs(bundle),
       ...(environmentAssets ? { environmentAssets } : {}),
       ...(bundle.experimentPath
         ? { experiment: { path: bundle.experimentPath } }
@@ -1559,13 +1563,16 @@ export function createCoworkBranchEvolutionDriver({
 
     const controllerRevision = await controllerRevisionReader(repositoryRoot)
     assertExecutionIdentity(state.spec.executionIdentity, await captureExecutionIdentity(repositoryRoot))
-    if (controllerRevision !== state.spec.controllerRevision) {
+    const revisionAuditChanged = controllerRevision !== state.spec.controllerRevision
+      && state.spec.resumeAudit?.at(-1)?.currentRevision !== controllerRevision
+    if (revisionAuditChanged) {
       state.spec.resumeAudit ??= []
       state.spec.resumeAudit.push({
         at: new Date().toISOString(), originalRevision: state.spec.controllerRevision,
         currentRevision: controllerRevision, executionDigest: state.spec.executionIdentity.digest,
         reason: 'identical-executed-content',
       })
+      state.spec.resumeAudit = state.spec.resumeAudit.slice(-64)
     }
     context = await contextFactory({ repositoryRoot, experimentPath, gatewayScope: runId })
     context.repositoryRoot = repositoryRoot
@@ -1797,6 +1804,7 @@ export function createCoworkBranchEvolutionDriver({
       preserveTrialCheckpoints:
         context.bundle.environment.protocol === 'omegause-officeval-docker-v1',
     })
+    if (revisionAuditChanged) await persist()
     return coworkBranchProjection({ branchId, state })
   }
 
@@ -2590,7 +2598,7 @@ export async function runPopulationEvolution({
     config: frozenConfig,
     recipe: bundle.recipe,
     configDigest: frozenBundle.digest,
-    fingerprint: canonicalJsonDigest({ executionDigest: executionIdentity.digest, configDigest: frozenBundle.digest }),
+    fingerprint: evolutionFingerprint({ executionIdentity, configDigest: frozenBundle.digest }),
   }
   const release = await acquireCampaignLock({
     campaignsRoot: populationsRoot,
@@ -2724,7 +2732,7 @@ export async function resumePopulationEvolution({
     config: frozenBundle.snapshot,
     recipe: bundle.recipe,
     configDigest: frozenBundle.digest,
-    fingerprint: canonicalJsonDigest({ executionDigest: executionIdentity.digest, configDigest: frozenBundle.digest }),
+    fingerprint: evolutionFingerprint({ executionIdentity, configDigest: frozenBundle.digest }),
   }
 
   const release = await acquireCampaignLock({
@@ -2919,20 +2927,25 @@ async function loadPopulationFinalAuthorization({
     throw new ProtocolError('Population Best Candidate Digest 与子 Run 不一致')
   }
   const frozenControllerRevision = branchState.spec.controllerRevision
-  const expectedFingerprint = canonicalJsonDigest({
+  const expectedFingerprint = evolutionFingerprint({
+    executionIdentity: branchState.spec.executionIdentity,
     controllerRevision: frozenControllerRevision,
     configDigest: state.configDigest,
   })
   if (expectedFingerprint !== state.configFingerprint) {
-    throw new ProtocolError('Population Bundle 与原 Controller Revision 的冻结指纹不一致')
+    throw new ProtocolError('Population Bundle 与冻结执行身份的指纹不一致')
   }
   const currentControllerRevision = await trustedControllerRevision(repositoryRoot)
-  await assertControllerRevisionForFinal({
-    repositoryRoot,
-    frozenRevision: frozenControllerRevision,
-    currentRevision: currentControllerRevision,
-    recoveryRequested: recoverInfrastructure,
-  })
+  if (branchState.spec.executionIdentity && !recoverInfrastructure) {
+    assertExecutionIdentity(branchState.spec.executionIdentity, await captureExecutionIdentity(repositoryRoot))
+  } else {
+    await assertControllerRevisionForFinal({
+      repositoryRoot,
+      frozenRevision: frozenControllerRevision,
+      currentRevision: currentControllerRevision,
+      recoveryRequested: recoverInfrastructure,
+    })
+  }
 
   let recovery = null
   if (recoverInfrastructure) {
@@ -2996,7 +3009,9 @@ async function finalizeCoworkRun({
   const baselineId = safeCandidateId(state.spec.baselineId)
   const championId = safeCandidateId(state.spec.championId)
   const controllerRevision = await trustedControllerRevision(repositoryRoot)
-  if (recovery === null && controllerRevision !== state.spec.controllerRevision) {
+  if (recovery === null && state.spec.executionIdentity) {
+    assertExecutionIdentity(state.spec.executionIdentity, await captureExecutionIdentity(repositoryRoot))
+  } else if (recovery === null && controllerRevision !== state.spec.controllerRevision) {
     throw new ProtocolError('当前 Controller Revision 与 Run 冻结值不一致', [
       `run=${state.spec.controllerRevision ?? '(missing)'}`,
       `current=${controllerRevision}`,

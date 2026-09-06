@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { capturePopulationBundle, createCoworkBranchEvolutionDriver } from '../src/cowork-orchestrator.mjs'
+import { capturePopulationBundle, createCoworkBranchEvolutionDriver, finalizeEvolution } from '../src/cowork-orchestrator.mjs'
+import { captureExecutionIdentity, evolutionFingerprint } from '../src/execution-identity.mjs'
 import { normalizeEvolutionRecipe } from '../src/evolution-recipe.mjs'
 import { PopulationOrchestrator } from '../src/population-orchestrator.mjs'
 import { stageUpdaterContext } from '../src/runtimes/dsh.mjs'
+import { runProcess } from '../src/process.mjs'
 import { runtimeFixture, failingRun, hash, repositoryRoot, startFixtureGateway } from './fixtures/solver-failure-runtime.mjs'
 
 function recipe(mode) {
@@ -27,7 +29,10 @@ function zeroUsage(requests) {
     observedInputTokens: requests, observedOutputTokens: requests, cacheReadTokens: 0, reasoningTokens: 0 }
 }
 
-async function branchFixture(t, { mode = 'single', providerFailure = false, invalidProposal = false } = {}) {
+async function branchFixture(t, {
+  mode = 'single', providerFailure = false, failureBranch = null, invalidProposal = false,
+  allowRuntimeFailurePromotion = false,
+} = {}) {
   const fixture = await runtimeFixture(t)
   const bundle = fixture.bundle
   bundle.recipe = recipe(mode)
@@ -38,6 +43,10 @@ async function branchFixture(t, { mode = 'single', providerFailure = false, inva
     protocol: 'controller-owned-overlay-v1', baselinePath: 'fixture-candidate' }
   bundle.environment.task.environmentAssets = 'fixture-assets'
   bundle.policy.bootstrap.samples = 100
+  if (allowRuntimeFailurePromotion) {
+    bundle.policy.gates.safety.maximumSolverFailures = null
+    bundle.policy.gates.quality.minimumRewardImproved = 0
+  }
   const prompt = join(fixture.root, bundle.updater.promptPath)
   await mkdir(dirname(prompt), { recursive: true })
   await writeFile(prompt, await readFile(join(repositoryRoot, bundle.updater.promptPath)))
@@ -48,9 +57,11 @@ async function branchFixture(t, { mode = 'single', providerFailure = false, inva
   }
   const packets = new Map()
   const updateCounts = new Map()
+  let revision = 'a'.repeat(40)
   const frozen = await capturePopulationBundle(bundle, fixture.root)
   const contextFactory = async ({ experimentPath, gatewayScope }) => {
-    const gateway = await startFixtureGateway(t, { modes: fixture.modes })
+    const gatewayModes = new Map(fixture.modes)
+    const gateway = await startFixtureGateway(t, { modes: gatewayModes })
     let updaterCalls = 0
     const updater = {
       async ensureRuntime() { return {} },
@@ -69,7 +80,9 @@ async function branchFixture(t, { mode = 'single', providerFailure = false, inva
         const original = await readFile(join(options.candidateWorkspace, 'run.py'), 'utf8')
         const content = total >= 2 ? original.replace('answer = json.loads(text)', 'answer = text') : original
         await writeFile(join(options.candidateWorkspace, 'run.py'), `${content}\n# fixture candidate ${total}\n`)
-        if (providerFailure && total === 1) fixture.modes.set('valid', 'http502')
+        if (providerFailure && total === 1 && (!failureBranch || gatewayScope.endsWith(failureBranch))) {
+          gatewayModes.set('valid', 'http502')
+        }
         return { stdout: 'fixture updater', stderr: '', report: {
           diagnosis: '读取真实 Driver 产生的训练错误与失败 Candidate 证据',
           hypothesis: 'fixture 验证回退代码后保留失败经验', changedFiles: invalidProposal && total === 1 ? [] : ['run.py'],
@@ -90,8 +103,9 @@ async function branchFixture(t, { mode = 'single', providerFailure = false, inva
   const createBranch = (branchId, runRoot) => createCoworkBranchEvolutionDriver({
     repositoryRoot: fixture.root, experimentPath: join(fixture.root, 'fixture-experiment.json'),
     runId: `fixture-${mode}-${branchId}`, branchId, runRootOverride: runRoot, expectedBundleDigest: frozen.digest,
-  }, { contextFactory, environmentFactory: fixture.environmentFactory, controllerRevisionReader: async () => 'a'.repeat(40) })
-  return { ...fixture, bundle, frozen, createBranch, packets, updateCounts }
+  }, { contextFactory, environmentFactory: fixture.environmentFactory, controllerRevisionReader: async () => revision })
+  return { ...fixture, bundle, frozen, createBranch, packets, updateCounts,
+    changeAuditRevision() { revision = 'b'.repeat(40) } }
 }
 
 test('完整 Controller 闭环：Champion 训练失败进入 Updater，Rejected 详细病例进入下一轮且允许 L3', async (t) => {
@@ -106,8 +120,10 @@ test('完整 Controller 闭环：Champion 训练失败进入 Updater，Rejected 
   assert.equal(once.spec.championId, 'h0')
   assert.equal(once.spec.candidates[1].status, 'rejected')
   assert.ok(once.spec.candidates[1].decision.gates.some((gate) => gate.id === 'maximum-solver-failures' && !gate.passed))
+  fixture.changeAuditRevision()
   const restore = fixture.createBranch('branch-001', runRoot)
   await restore.restore()
+  assert.equal(JSON.parse(await readFile(join(runRoot, 'state.json'))).spec.resumeAudit[0].currentRevision, 'b'.repeat(40))
   const second = await restore.advanceOne({ stepId: 'fixture-step-2', coordination: {} })
   assert.equal(second.budgetConsumed, 1)
   const packets = [...fixture.packets.values()][0]
@@ -118,9 +134,17 @@ test('完整 Controller 闭环：Champion 训练失败进入 Updater，Rejected 
   assert.equal(packets[1].spec.rejectedCandidateEvidence.cases[0].solverFailures[0].category, 'candidate')
   assert.equal(packets[1].metadata.candidateId, 'h0')
   const state = JSON.parse(await readFile(join(runRoot, 'state.json')))
+  assert.equal(state.spec.controllerRevision, 'a'.repeat(40))
+  assert.equal(state.spec.resumeAudit[0].currentRevision, 'b'.repeat(40))
+  assert.equal(state.spec.resumeAudit[0].reason, 'identical-executed-content')
   assert.equal(state.spec.generationsCompleted, 2)
   assert.equal(state.spec.candidates[2].decision.gates.find((gate) => gate.id === 'maximum-solver-failures').passed, true)
   assert.equal(state.spec.ledger.candidatesEvaluated, 2)
+  const record = JSON.parse(await readFile(join(runRoot, 'results/generation-2/g002-l3-feedback.jsonl')))
+  const diagnostics = JSON.parse(await readFile(join(runRoot, record.artifacts[0].root, 'solver-diagnostics.json')))
+  assert.equal(diagnostics.context.candidateId, 'g002-l3')
+  assert.equal(diagnostics.complete, true)
+  assert.ok(diagnostics.requests[0].requestId)
   assert.equal(await readFile(join(runRoot, 'candidates/h0/workspace/run.py'), 'utf8'), failingRun)
   await restore.advanceOne({ stepId: 'fixture-step-2', coordination: {} })
   assert.equal([...fixture.updateCounts.values()][0], 2)
@@ -167,15 +191,55 @@ test('非法 Mutation Report 同样保存 Candidate Digest/差异证据，拒绝
   assert.ok(evidence.code.some((entry) => entry.path === 'run.py'))
 })
 
+test('显式关闭运行失败晋升 Gate 时只遵守冻结 rubric/质量策略，不隐式修改分数', async (t) => {
+  const fixture = await branchFixture(t, { allowRuntimeFailurePromotion: true })
+  const runRoot = join(fixture.root, 'branch-run')
+  const branch = fixture.createBranch('branch-001', runRoot)
+  await branch.initialize()
+  await branch.advanceOne({ stepId: 'fixture-step-1', coordination: {} })
+  const state = JSON.parse(await readFile(join(runRoot, 'state.json')))
+  assert.equal(state.spec.championId, 'g001-l3')
+  assert.equal(state.spec.candidates[1].evaluation.primary.value, 0.5)
+  assert.equal(state.spec.candidates[1].decision.gates.some((gate) => gate.id === 'maximum-solver-failures'), false)
+})
+
+test('双 Branch 一支已结算另一支 Provider 暂停，Population 恢复不重跑已完成支或重复扣预算', async (t) => {
+  const fixture = await branchFixture(t, { mode: 'independent', providerFailure: true, failureBranch: 'branch-002' })
+  const campaignsRoot = join(fixture.root, 'campaigns')
+  await mkdir(campaignsRoot)
+  const options = {
+    loadedCampaign: { config: fixture.frozen.snapshot, recipe: fixture.bundle.recipe,
+      configDigest: fixture.frozen.digest, fingerprint: hash('fixture-partial-branch') },
+    campaignsRoot, campaignId: 'fixture-partial-branch', frozenConfig: fixture.frozen.snapshot,
+    createBranch({ branchId, branchesRoot }) {
+      return fixture.createBranch(branchId, join(branchesRoot, branchId, 'run'))
+    },
+  }
+  const first = new PopulationOrchestrator(options)
+  await first.initialize()
+  const paused = await first.run()
+  assert.equal(paused.status, 'PAUSED_INFRASTRUCTURE')
+  assert.equal(fixture.updateCounts.get('fixture-independent-branch-001'), 1)
+  assert.equal(fixture.updateCounts.get('fixture-independent-branch-002'), 1)
+  const restored = new PopulationOrchestrator(options)
+  const done = await restored.resume()
+  assert.notEqual(done.status, 'PAUSED_INFRASTRUCTURE')
+  assert.equal(done.budget.consumed, 4)
+  assert.equal(fixture.updateCounts.get('fixture-independent-branch-001'), 2)
+  assert.equal(fixture.updateCounts.get('fixture-independent-branch-002'), 2)
+})
+
 test('五种 Mode 均将可确认 Solver 失败正常结算并消耗预算，不进入基础设施暂停', async (t) => {
   for (const mode of ['single', 'independent', 'mutualism', 'competition', 'combined']) {
     await t.test(mode, async (child) => {
       const fixture = await branchFixture(child, { mode })
-      const campaignsRoot = join(fixture.root, 'campaigns')
-      await mkdir(campaignsRoot)
+      const campaignsRoot = join(fixture.root, '.rsi/runs/populations')
+      await mkdir(campaignsRoot, { recursive: true })
+      const executionIdentity = await captureExecutionIdentity(fixture.root)
       const orchestrator = new PopulationOrchestrator({
         loadedCampaign: { config: fixture.frozen.snapshot, recipe: fixture.bundle.recipe,
-          configDigest: fixture.frozen.digest, fingerprint: hash(`fixture-${mode}`) },
+          configDigest: fixture.frozen.digest,
+          fingerprint: evolutionFingerprint({ executionIdentity, configDigest: fixture.frozen.digest }) },
         campaignsRoot, campaignId: `fixture-${mode}`, frozenConfig: fixture.frozen.snapshot,
         createBranch({ branchId, branchesRoot }) {
           return fixture.createBranch(branchId, join(branchesRoot, branchId, 'run'))
@@ -188,6 +252,16 @@ test('五种 Mode 均将可确认 Solver 失败正常结算并消耗预算，不
       for (const packets of fixture.packets.values()) {
         assert.ok(packets[0].spec.cases[0].solverFailures.length > 0)
         if (packets.length > 1) assert.ok(packets[1].spec.rejectedCandidateEvidence)
+      }
+      if (mode === 'single') {
+        await runProcess('git', ['-C', fixture.root, 'init', '-q'])
+        await runProcess('git', ['-C', fixture.root, '-c', 'user.name=Fixture',
+          '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false',
+          'commit', '--allow-empty', '-q', '-m', 'fixture final authorization'])
+        // 使用真实 Final 授权入口验证新指纹；在不存在的 fixture 配置处停止，不领取 Final。
+        await assert.rejects(finalizeEvolution({
+          repositoryRoot: fixture.root, runDirectory: join(campaignsRoot, 'fixture-single'),
+        }), (error) => error.message === `配置文件 不存在：${join(fixture.root, 'fixture-experiment.json')}`)
       }
     })
   }

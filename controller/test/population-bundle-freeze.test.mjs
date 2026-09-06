@@ -147,3 +147,28 @@ test('Branch 拒绝运行中变化的 Prompt，并保留已校验的 Prompt 内�
   )
   assert.equal(matched.updaterPromptSource, '只修改允许的模块。\n')
 })
+
+test('冻结实际 Provider Endpoint 与 Updater 宿主二进制内容，但允许只轮换凭据', async (t) => {
+  const context = await fixture()
+  const binary = join(context.repositoryRoot, 'node-fixture')
+  await writeFile(binary, 'runtime-v1')
+  context.bundle.updater.runtime.nodeBinary = binary
+  const previousUrl = process.env.FIXTURE_BASE_URL
+  const previousKey = process.env.FIXTURE_API_KEY
+  t.after(() => {
+    for (const [key, value] of [['FIXTURE_BASE_URL', previousUrl], ['FIXTURE_API_KEY', previousKey]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value
+    }
+  })
+  process.env.FIXTURE_BASE_URL = 'https://one.example.invalid/v1'
+  process.env.FIXTURE_API_KEY = 'first-credential'
+  const frozen = await capturePopulationBundle(context.bundle, context.repositoryRoot)
+  process.env.FIXTURE_API_KEY = 'rotated-credential'
+  assert.equal((await capturePopulationBundle(context.bundle, context.repositoryRoot)).digest, frozen.digest)
+  process.env.FIXTURE_BASE_URL = 'https://other.example.invalid/v1'
+  assert.notEqual((await capturePopulationBundle(context.bundle, context.repositoryRoot)).digest, frozen.digest)
+  process.env.FIXTURE_BASE_URL = 'https://one.example.invalid/v1'
+  await writeFile(binary, 'runtime-v2')
+  assert.notEqual((await capturePopulationBundle(context.bundle, context.repositoryRoot)).digest, frozen.digest)
+  assert.doesNotMatch(JSON.stringify(frozen.snapshot), /first-credential|one.example.invalid/u)
+})

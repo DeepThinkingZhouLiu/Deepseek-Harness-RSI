@@ -24,6 +24,14 @@ export class SolverFailure extends Error {
   }
 }
 
+function provenFinalResponse(request) {
+  return request?.httpStatus === 200 && request.responseComplete && request.done
+    && request.finishReason === 'stop' && request.contentBytes > 0
+    && request.hasFinalContent !== false && !request.streamError && !request.transportError
+    && !(request.malformedEvents > 0) && !request.sawRefusal
+    && !(request.sawToolCalls && !request.requestedTools)
+}
+
 export function classifySolverFailure({ context = {}, process: processEvidence = null, diagnostics = null }) {
   const requests = diagnostics?.requests ?? []
   let category = 'unknown'
@@ -31,7 +39,8 @@ export function classifySolverFailure({ context = {}, process: processEvidence =
   // 非 Candidate 发出的 HTTP/认证故障优先于进程退出，不能被伪造的 Python Trace 覆盖。
   const last = requests.at(-1)
   if (diagnostics?.complete === true && last?.origin === 'gateway-request'
-      && ['invalid-json-request', 'invalid-messages'].includes(last.errorCode)) {
+      && ['invalid-json-request', 'invalid-messages'].includes(last.errorCode)
+      && requests.slice(0, -1).every(provenFinalResponse)) {
     category = 'candidate'
     code = 'invalid-model-request'
   } else if (last && (last.origin === 'gateway-control'
@@ -44,11 +53,14 @@ export function classifySolverFailure({ context = {}, process: processEvidence =
   } else if (last && (last.httpStatus !== 200 || !last.responseComplete
       || last.streamError || !last.done || !last.finishReason || last.malformedEvents > 0)) {
     code = 'upstream-contract-unproven'
-  } else if (last && (last.contentBytes === 0 || last.hasFinalContent === false || last.finishReason === 'length'
+  } else if (last && (last.contentBytes === 0 || last.hasFinalContent === false || last.finishReason !== 'stop'
       || last.sawRefusal || (last.sawToolCalls && !last.requestedTools))) {
     code = last.sawToolCalls && !last.requestedTools
       ? 'unrequested-native-tool-calls'
       : (last.sawReasoning && last.contentBytes === 0 ? 'reasoning-only-response' : 'no-valid-final-response')
+  } else if (requests.some((request) => !provenFinalResponse(request))) {
+    // 同题并发或先失败后成功时，最后一个响应不能证明哪个请求导致进程退出。
+    code = 'mixed-request-outcomes'
   } else if (processEvidence?.timedOut || processEvidence?.signal
       || [125, 126, 127, 137].includes(processEvidence?.exitCode)) {
     category = 'trusted-runtime'
@@ -57,6 +69,7 @@ export function classifySolverFailure({ context = {}, process: processEvidence =
       && processEvidence?.source === 'trusted-process'
       && Number.isInteger(processEvidence.exitCode)
       && processEvidence.exitCode >= 0
+      && (requests.length > 0 || (processEvidence.exitCode === 0 && processEvidence.outputContractFailed))
       && (processEvidence.exitCode !== 0 || processEvidence.outputContractFailed)) {
     category = 'candidate'
     code = processEvidence.outputContractFailed ? 'solver-output-contract' : 'candidate-process-exit'
@@ -82,8 +95,15 @@ export function validateSolverFailures(value) {
         || failure.terminal !== (failure.category === 'candidate')) {
       throw new Error('solver_failures 包含无效的结构化分类')
     }
+    if (failure.diagnostics !== undefined && failure.diagnostics !== null
+        && (typeof failure.diagnostics !== 'object' || Array.isArray(failure.diagnostics)
+          || (failure.diagnostics.requests != null && !Array.isArray(failure.diagnostics.requests)))) {
+      throw new Error('solver_failures diagnostics/requests 格式无效')
+    }
   }
-  return value
+  return value.map((failure) => ({ ...failure,
+    diagnostics: failure.diagnostics ? { ...failure.diagnostics, requests: failure.diagnostics.requests ?? [] } : null,
+  }))
 }
 
 export function solverProcessEvidence(result, { outputContractFailed = false } = {}) {

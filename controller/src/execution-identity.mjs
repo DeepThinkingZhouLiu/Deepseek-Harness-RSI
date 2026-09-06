@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { lstat, readFile, readdir } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { lstat, readFile, readdir, realpath } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ProtocolError } from './protocol.mjs'
@@ -15,10 +16,43 @@ const hash = (value) => createHash('sha256').update(value).digest('hex')
 export class ResumeCompatibilityError extends ProtocolError {
   constructor(message, details = []) {
     super(message, details)
+    this.name = 'ResumeCompatibilityError'
     this.code = 'RSI_RESUME_INCOMPATIBLE'
     this.retryable = false
     this.exitCode = 3
   }
+}
+
+export async function binaryContentIdentity(path) {
+  const resolved = await realpath(path)
+  const info = await lstat(resolved)
+  if (!info.isFile()) throw new ResumeCompatibilityError('Runtime Binary 不是普通文件', [path])
+  const digest = createHash('sha256')
+  for await (const chunk of createReadStream(resolved)) digest.update(chunk)
+  return { sha256: digest.digest('hex'), bytes: info.size, executable: !!(info.mode & 0o111) }
+}
+
+export async function captureRuntimeInputs(bundle) {
+  const hostBinaries = {}
+  for (const key of ['nodeBinary', 'bwrapPath', 'setprivPath']) {
+    if (bundle.updater.runtime?.[key]) hostBinaries[key] = await binaryContentIdentity(bundle.updater.runtime[key])
+  }
+  // 只摘要实际 Endpoint；不读取 API Key，Endpoint 中即使有敏感信息也不落正文。
+  const providerEndpoints = {}
+  for (const [role, provider] of Object.entries(bundle.providers ?? { solver: bundle.provider, updater: bundle.provider })) {
+    const variable = provider?.credentials?.baseUrlEnvironment
+    if (!variable) continue
+    const value = process.env[variable]
+    providerEndpoints[role] = { environment: variable, sha256: value === undefined ? null : hash(value) }
+  }
+  return { hostBinaries, providerEndpoints }
+}
+
+export function evolutionFingerprint({ executionIdentity, controllerRevision, configDigest }) {
+  // 字段按字典序排列，与旧的 canonicalJsonDigest 保持一致。
+  return hash(JSON.stringify(executionIdentity
+    ? { configDigest, executionDigest: executionIdentity.digest }
+    : { configDigest, controllerRevision }))
 }
 
 async function regularTree(root, prefix = '') {
@@ -35,7 +69,9 @@ async function regularTree(root, prefix = '') {
   return files.sort((left, right) => left.path.localeCompare(right.path))
 }
 
-export async function captureExecutionIdentity(repositoryRoot, { dependencyRoot, nodeVersion = process.version } = {}) {
+export async function captureExecutionIdentity(repositoryRoot, {
+  dependencyRoot, nodeVersion = process.version, nodeBinary = process.execPath,
+} = {}) {
   const files = []
   for (const path of EXECUTION_PATHS) {
     const absolute = resolve(repositoryRoot, path)
@@ -54,7 +90,7 @@ export async function captureExecutionIdentity(repositoryRoot, { dependencyRoot,
   const dependencies = await regularTree(yamlRoot)
   const spec = {
     files: files.sort((left, right) => left.path.localeCompare(right.path)),
-    dependencies: { yaml: dependencies }, nodeVersion,
+    dependencies: { yaml: dependencies }, nodeVersion, nodeBinary: await binaryContentIdentity(nodeBinary),
     solverFailureProtocol: SOLVER_FAILURE_PROTOCOL,
   }
   return { version: EXECUTION_IDENTITY_VERSION, digest: hash(JSON.stringify(spec)), spec }
@@ -63,7 +99,7 @@ export async function captureExecutionIdentity(repositoryRoot, { dependencyRoot,
 export function assertExecutionIdentity(stored, current) {
   if (!stored || stored.version !== EXECUTION_IDENTITY_VERSION) {
     throw new ResumeCompatibilityError('旧 Run 缺少可证明依赖和错误处理协议一致的执行内容摘要，拒绝自动恢复', [
-      '旧版本=Git-HEAD-only；新版本=execution-identity-v2',
+      `旧版本=${stored?.version ?? 'Git-HEAD-only'}；新版本=${EXECUTION_IDENTITY_VERSION}`,
       `新错误处理协议=${SOLVER_FAILURE_PROTOCOL}`,
       '不能通过改写旧 hash 迁移；需要原执行依赖/Runtime 内容证据。旧正式实验未被运行。',
     ])
@@ -80,6 +116,7 @@ export function assertExecutionIdentity(stored, current) {
       ...changed.slice(0, 32),
       ...(JSON.stringify(stored.spec.dependencies) !== JSON.stringify(current.spec.dependencies) ? ['dependency:yaml'] : []),
       ...(stored.spec.nodeVersion !== current.spec.nodeVersion ? ['runtime:nodeVersion'] : []),
+      ...(JSON.stringify(stored.spec.nodeBinary) !== JSON.stringify(current.spec.nodeBinary) ? ['runtime:nodeBinary'] : []),
     ])
   }
 }

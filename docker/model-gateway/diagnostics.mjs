@@ -82,7 +82,7 @@ export function createTrialDiagnostics({ emptyUsage, tokenMatches }) {
 }
 
 // 与原始流旁路关联，仅计算脱敏元信息；从不缓存或记录 reasoning 正文。
-export function responseObserver(record) {
+export function responseObserver(record, { secretValues = [] } = {}) {
   const decoder = new StringDecoder('utf8')
   let buffer = ''
   let overflow = false
@@ -112,8 +112,10 @@ export function responseObserver(record) {
   return {
     headers(status, headers) {
       record.httpStatus = status
-      record.upstreamRequestId = safeRequestId(headers['x-request-id'] ?? headers['request-id']
+      const id = safeRequestId(headers['x-request-id'] ?? headers['request-id']
         ?? headers['x-deepseek-request-id'])
+      record.upstreamRequestId = secretValues.some((value) => typeof value === 'string'
+        && value.length >= 4 && id?.includes(value)) ? null : id
     },
     chunk(chunk) {
       record.responseBytes += chunk.length
