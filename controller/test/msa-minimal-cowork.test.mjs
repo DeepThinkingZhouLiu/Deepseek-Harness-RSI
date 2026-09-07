@@ -687,6 +687,121 @@ test('MSA Cowork Chat Client 对正常结束的空流最多重试两次', async 
   assert.equal(requests, 3)
 })
 
+test('MSA Cowork Chat Client 重试未交给 Agent 的 SSE 上游错误', async (context) => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  let requests = 0
+  const server = http.createServer((_request, response) => {
+    requests += 1
+    response.writeHead(200, { 'content-type': 'text/event-stream' })
+    if (requests < 3) {
+      response.end([
+        `data: ${JSON.stringify({ error: { message: 'transient private detail' } })}`,
+        '',
+        'data: [DONE]',
+        '',
+      ].join('\n'))
+      return
+    }
+    response.end([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: '<bash>echo recovered</bash>' } }] })}`,
+      '',
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}`,
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n'))
+  })
+  await new Promise((accept, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', accept)
+  })
+  context.after(() => new Promise((accept) => server.close(accept)))
+  const port = server.address().port
+  const script = [
+    'import sys',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'from model import query',
+    `print(query("http://127.0.0.1:${port}", "dummy-token", "fixture-terra", [{"role":"user","content":"hi"}], 77))`,
+  ].join('\n')
+  const { stdout, stderr } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+
+  assert.equal(stdout.trim(), '<bash>echo recovered</bash>')
+  assert.equal(stderr, '')
+  assert.equal(requests, 3)
+})
+
+test('MSA Cowork Chat Client 只重试可恢复的 Gateway HTTP 状态', async (context) => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  let requests = 0
+  const server = http.createServer((_request, response) => {
+    requests += 1
+    if (requests < 3) {
+      response.writeHead(502, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({ error: 'private upstream detail' }))
+      return
+    }
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({
+      choices: [{ message: { content: '<final>recovered</final>' }, finish_reason: 'stop' }],
+    }))
+  })
+  await new Promise((accept, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', accept)
+  })
+  context.after(() => new Promise((accept) => server.close(accept)))
+  const port = server.address().port
+  const script = [
+    'import sys',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'from model import query',
+    `print(query("http://127.0.0.1:${port}", "dummy-token", "fixture-terra", [{"role":"user","content":"hi"}], 77))`,
+  ].join('\n')
+  const { stdout, stderr } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+
+  assert.equal(stdout.trim(), '<final>recovered</final>')
+  assert.equal(stderr, '')
+  assert.equal(requests, 3)
+})
+
+test('MSA Cowork Chat Client 不重试认证错误且不回显上游响应体', async (context) => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  let requests = 0
+  const server = http.createServer((_request, response) => {
+    requests += 1
+    response.writeHead(401, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ error: 'private credential detail' }))
+  })
+  await new Promise((accept, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', accept)
+  })
+  context.after(() => new Promise((accept) => server.close(accept)))
+  const port = server.address().port
+  const script = [
+    'import sys',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'from model import query',
+    `query("http://127.0.0.1:${port}", "dummy-token", "fixture-terra", [{"role":"user","content":"hi"}], 77)`,
+  ].join('\n')
+
+  await assert.rejects(
+    executeFile('python3', ['-c', script], {
+      env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+    }),
+    (error) => {
+      assert.match(error.stderr, /model gateway HTTP 401/u)
+      assert.doesNotMatch(error.stderr, /private credential detail/u)
+      return true
+    },
+  )
+  assert.equal(requests, 1)
+})
+
 test('MSA Cowork Chat Client 丢弃 reasoning_content 且三次空流后关闭失败', async (context) => {
   const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
   const hiddenCommand = '<bash>touch /tmp/must-not-run</bash>'

@@ -6,7 +6,12 @@ import http.client
 import json
 from urllib.parse import urlsplit
 
-MAXIMUM_EMPTY_RESPONSE_ATTEMPTS = 3
+MAXIMUM_RESPONSE_ATTEMPTS = 3
+RETRYABLE_GATEWAY_STATUSES = frozenset({429, 502, 503, 504})
+
+
+class TransientModelResponseError(RuntimeError):
+    """上游响应尚未交给 Agent 时发生的可重试故障。"""
 
 
 def _content(value: object) -> str:
@@ -70,7 +75,7 @@ def _read_response(response: http.client.HTTPResponse) -> dict:
             continue
         event = json.loads(data)
         if event.get("error") is not None:
-            raise RuntimeError("model gateway streamed an upstream error")
+            raise TransientModelResponseError("model gateway streamed an upstream error")
         choices = event.get("choices", [])
         if not choices or not isinstance(choices[0], dict):
             continue
@@ -136,24 +141,39 @@ def query(
         "stream": True,
         "stream_options": {"include_usage": True},
     }).encode("utf-8")
-    for attempt in range(1, MAXIMUM_EMPTY_RESPONSE_ATTEMPTS + 1):
+    for attempt in range(1, MAXIMUM_RESPONSE_ATTEMPTS + 1):
         connection = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=1200)
-        connection.request(
-            "POST",
-            endpoint,
-            body=body,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "Content-Length": str(len(body)),
-            },
-        )
-        response = connection.getresponse()
         try:
+            connection.request(
+                "POST",
+                endpoint,
+                body=body,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "Content-Length": str(len(body)),
+                },
+            )
+            response = connection.getresponse()
             if response.status != 200:
-                error = response.read(4096).decode("utf-8", errors="replace")
-                raise RuntimeError(f"model gateway HTTP {response.status}: {error}")
+                response.read(4096)
+                if response.status in RETRYABLE_GATEWAY_STATUSES:
+                    raise TransientModelResponseError(
+                        f"model gateway returned retryable HTTP {response.status}"
+                    )
+                raise RuntimeError(f"model gateway HTTP {response.status}")
             result = _read_response(response)
+        except (
+            TransientModelResponseError,
+            http.client.HTTPException,
+            json.JSONDecodeError,
+            OSError,
+        ):
+            if attempt < MAXIMUM_RESPONSE_ATTEMPTS:
+                continue
+            raise RuntimeError(
+                f"model gateway transient response failure after {attempt} attempt(s)"
+            ) from None
         finally:
             connection.close()
 
@@ -166,7 +186,7 @@ def query(
         # 只把“正常结束但正文为空”或“空流”视为一次性上游故障。
         # length、tool_calls 等状态不会靠相同请求自动恢复，因此直接失败。
         if (
-            attempt < MAXIMUM_EMPTY_RESPONSE_ATTEMPTS
+            attempt < MAXIMUM_RESPONSE_ATTEMPTS
             and result["finish_reason"] in {None, "stop"}
         ):
             continue
