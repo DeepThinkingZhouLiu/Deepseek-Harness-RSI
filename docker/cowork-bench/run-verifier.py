@@ -57,7 +57,9 @@ def main() -> None:
         capture_output=True, text=True, timeout=1200, check=False,
         cwd=judge_path.parent,
     )
-    if process.returncode != 0 or not judge_result.is_file():
+    # CoworkEvoBench 的 Judge 用退出码表示是否达到通过阈值：0 表示通过，
+    # 1 表示未通过但评分结果仍然有效。只有其他退出码或缺失结果文件才是执行失败。
+    if process.returncode not in (0, 1) or not judge_result.is_file():
         detail = (process.stderr or process.stdout or "无结果文件")[-2000:]
         raise RuntimeError(f"Cowork CLI Judge 执行失败：{detail}")
     result = json.loads(judge_result.read_text(encoding="utf-8"))
