@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import http.client
 import json
+import time
 from urllib.parse import urlsplit
 
-MAXIMUM_RESPONSE_ATTEMPTS = 3
+MAXIMUM_TRANSIENT_RESPONSE_ATTEMPTS = 8
+MAXIMUM_EMPTY_RESPONSE_ATTEMPTS = 3
+RETRY_BASE_DELAY_SECONDS = 0.5
+RETRY_MAXIMUM_DELAY_SECONDS = 4.0
 RETRYABLE_GATEWAY_STATUSES = frozenset({429, 502, 503, 504})
 
 
@@ -122,6 +126,15 @@ def _empty_response_error(result: dict, attempts: int) -> RuntimeError:
     )
 
 
+def _wait_before_transient_retry(failure_count: int) -> None:
+    delay = min(
+        RETRY_MAXIMUM_DELAY_SECONDS,
+        RETRY_BASE_DELAY_SECONDS * (2 ** max(0, failure_count - 1)),
+    )
+    if delay > 0:
+        time.sleep(delay)
+
+
 def query(
     gateway_url: str,
     api_key: str,
@@ -141,7 +154,9 @@ def query(
         "stream": True,
         "stream_options": {"include_usage": True},
     }).encode("utf-8")
-    for attempt in range(1, MAXIMUM_RESPONSE_ATTEMPTS + 1):
+    transient_failures = 0
+    empty_failures = 0
+    while True:
         connection = http.client.HTTPConnection(parsed.hostname, parsed.port or 80, timeout=1200)
         try:
             connection.request(
@@ -169,10 +184,13 @@ def query(
             json.JSONDecodeError,
             OSError,
         ):
-            if attempt < MAXIMUM_RESPONSE_ATTEMPTS:
+            transient_failures += 1
+            if transient_failures < MAXIMUM_TRANSIENT_RESPONSE_ATTEMPTS:
+                _wait_before_transient_retry(transient_failures)
                 continue
             raise RuntimeError(
-                f"model gateway transient response failure after {attempt} attempt(s)"
+                "model gateway transient response failure after "
+                f"{transient_failures} attempt(s)"
             ) from None
         finally:
             connection.close()
@@ -185,11 +203,8 @@ def query(
 
         # 只把“正常结束但正文为空”或“空流”视为一次性上游故障。
         # length、tool_calls 等状态不会靠相同请求自动恢复，因此直接失败。
-        if (
-            attempt < MAXIMUM_RESPONSE_ATTEMPTS
-            and result["finish_reason"] in {None, "stop"}
-        ):
+        empty_failures += 1
+        if (empty_failures < MAXIMUM_EMPTY_RESPONSE_ATTEMPTS
+                and result["finish_reason"] in {None, "stop"}):
             continue
-        raise _empty_response_error(result, attempt)
-
-    raise RuntimeError("unreachable model gateway retry state")
+        raise _empty_response_error(result, empty_failures)

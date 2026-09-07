@@ -732,6 +732,52 @@ test('MSA Cowork Chat Client 重试未交给 Agent 的 SSE 上游错误', async 
   assert.equal(requests, 3)
 })
 
+test('MSA Cowork Chat Client 能跨过连续七次 SSE 上游错误', async (context) => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  let requests = 0
+  const server = http.createServer((_request, response) => {
+    requests += 1
+    response.writeHead(200, { 'content-type': 'text/event-stream' })
+    if (requests < 8) {
+      response.end([
+        `data: ${JSON.stringify({ error: { message: 'transient private detail' } })}`,
+        '',
+        'data: [DONE]',
+        '',
+      ].join('\n'))
+      return
+    }
+    response.end([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: '<final>recovered</final>' } }] })}`,
+      '',
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}`,
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n'))
+  })
+  await new Promise((accept, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', accept)
+  })
+  context.after(() => new Promise((accept) => server.close(accept)))
+  const port = server.address().port
+  const script = [
+    'import sys',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'import model',
+    'model.RETRY_BASE_DELAY_SECONDS = 0',
+    `print(model.query("http://127.0.0.1:${port}", "dummy-token", "fixture-terra", [{"role":"user","content":"hi"}], 77))`,
+  ].join('\n')
+  const { stdout, stderr } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+
+  assert.equal(stdout.trim(), '<final>recovered</final>')
+  assert.equal(stderr, '')
+  assert.equal(requests, 8)
+})
+
 test('MSA Cowork Chat Client 只重试可恢复的 Gateway HTTP 状态', async (context) => {
   const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
   let requests = 0
