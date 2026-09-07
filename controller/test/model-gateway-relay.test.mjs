@@ -7,6 +7,7 @@ import test from 'node:test'
 
 import {
   MODEL_GATEWAY_RELAY_PORT,
+  MODEL_GATEWAY_RELAY_ORIGIN,
   MODEL_GATEWAY_RELAY_URL,
   createModelGatewayRelay,
   relayWrappedInvocation,
@@ -74,6 +75,7 @@ test('relay forwards the fixed loopback endpoint only through its Unix socket', 
     body: '{"input":"hello"}',
   })
   assert.equal(MODEL_GATEWAY_RELAY_URL, 'http://127.0.0.1:43119/v1')
+  assert.equal(MODEL_GATEWAY_RELAY_ORIGIN, 'http://127.0.0.1:43119')
 })
 
 test('relay wrapper preserves the original command as inert arguments', () => {

@@ -75,6 +75,13 @@ function normalizeUpstreamEndpoint(value, wireProtocol) {
   return base
 }
 
+function trustedRequestQuery(requestUrl, requestPath, wireProtocol) {
+  if (requestUrl === requestPath) return ''
+  if (wireProtocol === 'anthropic-messages'
+      && requestUrl === `${requestPath}?beta=true`) return '?beta=true'
+  return null
+}
+
 function normalizeApiKey(value) {
   const key = Buffer.isBuffer(value) ? value.toString('utf8').trim() : String(value ?? '').trim()
   if (key.length < 8 || key.length > MAX_SECRET_BYTES || /[\r\n]/u.test(key)) {
@@ -688,7 +695,12 @@ export function createModelGateway(options) {
         await audit(403)
         return
       }
-      if (request.url !== config.requestPath) {
+      const requestQuery = trustedRequestQuery(
+        request.url,
+        config.requestPath,
+        config.wireProtocol,
+      )
+      if (requestQuery === null) {
         rejectRequest(request, response, 404)
         await audit(404)
         return
@@ -772,8 +784,10 @@ export function createModelGateway(options) {
           return
         }
 
+        const upstreamEndpoint = new URL(config.endpoint)
+        upstreamEndpoint.search = requestQuery
         const outcome = await proxyToUpstream({
-          endpoint: config.endpoint,
+          endpoint: upstreamEndpoint,
           payload: Buffer.from(JSON.stringify(trustedBody)),
           apiKey,
           requestId,
@@ -829,8 +843,10 @@ export function createModelGateway(options) {
           || /[\r\n\0]/u.test(socketPath) || socketPath.length > 100)) {
         throw new TypeError('model gateway socketPath must be a short absolute path')
       }
-      if (unix && (typeof publicUrl !== 'string'
-          || !/^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}\/v1$/u.test(publicUrl))) {
+      const publicUrlPattern = config.wireProtocol === 'anthropic-messages'
+        ? /^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}$/u
+        : /^http:\/\/127\.0\.0\.1:[1-9]\d{0,4}\/v1$/u
+      if (unix && (typeof publicUrl !== 'string' || !publicUrlPattern.test(publicUrl))) {
         throw new TypeError('Unix model gateway requires a fixed loopback publicUrl')
       }
       if (unix && ((socketUid === undefined) !== (socketGid === undefined)

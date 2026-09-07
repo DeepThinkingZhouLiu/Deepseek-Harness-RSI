@@ -4,7 +4,8 @@ import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const MODEL_GATEWAY_RELAY_PORT = 43119
-export const MODEL_GATEWAY_RELAY_URL = `http://127.0.0.1:${MODEL_GATEWAY_RELAY_PORT}/v1`
+export const MODEL_GATEWAY_RELAY_ORIGIN = `http://127.0.0.1:${MODEL_GATEWAY_RELAY_PORT}`
+export const MODEL_GATEWAY_RELAY_URL = `${MODEL_GATEWAY_RELAY_ORIGIN}/v1`
 
 const MAXIMUM_SOCKET_PATH_BYTES = 100
 const HOP_BY_HOP_HEADERS = new Set([

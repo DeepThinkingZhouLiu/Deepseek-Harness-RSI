@@ -23,6 +23,12 @@ function mountMode(args, source, destination) {
   return null
 }
 
+function includesSequence(values, sequence) {
+  return values.some((_, index) => sequence.every(
+    (value, offset) => values[index + offset] === value,
+  ))
+}
+
 function invocationOptions() {
   return {
     nodeBinary: '/opt/node-dist/bin/node',
@@ -194,6 +200,7 @@ test('Claude Code updater 只使用隔离的 Anthropic Gateway 和固定 CLI 参
     gatewaySocketPath: '/srv/updater-run/model-gateway.sock',
     upstreamRoot: '/srv/upstream',
     outputRoot: '/srv/output',
+    gatewayUrl: 'http://127.0.0.1:1234',
     baseEnv: {
       ...options.baseEnv,
       ANTHROPIC_API_KEY: 'must-not-pass',
@@ -230,6 +237,9 @@ test('Claude Code updater 只使用隔离的 Anthropic Gateway 和固定 CLI 参
   assert.equal(mountMode(invocation.args, '/srv/output', UPDATER_SANDBOX_PATHS.output), '--bind')
   assert.ok(invocation.args.includes('--unshare-net'))
   assert.ok(invocation.args.includes('--proc'))
+  assert.equal(includesSequence(invocation.args, [
+    '--uid', String(options.uid), '--gid', String(options.gid),
+  ]), true)
 })
 
 test('extracts RSI_STOP from Codex JSONL final agent message', () => {

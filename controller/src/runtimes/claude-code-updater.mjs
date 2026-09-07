@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { validateModelGatewayEnvironment } from '../cowork-model-gateway.mjs'
-import { MODEL_GATEWAY_RELAY_URL } from '../model-gateway-relay.mjs'
+import { MODEL_GATEWAY_RELAY_ORIGIN } from '../model-gateway-relay.mjs'
 import { startModelGateway } from '../model-gateway.mjs'
 import { ProtocolError } from '../protocol.mjs'
 import { runProcess } from '../subprocess.mjs'
@@ -136,7 +136,8 @@ export function createClaudeCodeUpdaterDriver({
           maxConcurrency: 1,
           candidateApiKey: dummyKey,
           socketPath,
-          publicUrl: MODEL_GATEWAY_RELAY_URL,
+          // Anthropic SDK 会自行追加 /v1/messages?beta=true，因此这里必须传 Origin。
+          publicUrl: MODEL_GATEWAY_RELAY_ORIGIN,
           socketUid: uid,
           socketGid: gid,
           audit: async (record) => recordCliUsageAudit(measuredUsage, record),

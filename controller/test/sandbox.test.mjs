@@ -189,6 +189,14 @@ test('generic sandbox 只允许当前宿主身份保留附加组', () => {
     `--reuid=${uid}`, `--regid=${gid}`, '--keep-groups', '--no-new-privs',
   ])
   assert.throws(() => buildBubblewrapInvocation({ ...options, uid: uid + 1 }), /当前宿主 UID\/GID/u)
+  const hostIdentity = buildBubblewrapInvocation({ ...options, guestIdentity: 'host' })
+  assert.equal(includesSequence(hostIdentity.args, [
+    '--uid', String(uid), '--gid', String(gid),
+  ]), true)
+  assert.throws(
+    () => buildBubblewrapInvocation({ ...options, guestIdentity: 'unknown' }),
+    /guestIdentity/u,
+  )
 })
 
 test('generic sandbox can expose only a synthetic proc self executable', () => {

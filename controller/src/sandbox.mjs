@@ -205,6 +205,7 @@ export function buildBubblewrapInvocation({
   hostname = 'harness-rsi',
   maskedPaths = [],
   preserveSupplementaryGroups = false,
+  guestIdentity = 'root',
 }) {
   const userId = positiveIdentity(uid, 'sandbox uid')
   const groupId = positiveIdentity(gid, 'sandbox gid')
@@ -216,6 +217,9 @@ export function buildBubblewrapInvocation({
   if (preserveSupplementaryGroups
       && (process.getuid?.() !== userId || process.getgid?.() !== groupId)) {
     throw new ProtocolError('只有保持当前宿主 UID/GID 时才能保留附加组')
+  }
+  if (!['root', 'host'].includes(guestIdentity)) {
+    throw new ProtocolError('sandbox guestIdentity 只能是 root 或 host')
   }
   if (!NETWORK_MODES.has(network)) throw new ProtocolError('sandbox network 模式无效')
   if (!PROC_MODES.has(procMode)) throw new ProtocolError('sandbox proc 模式无效')
@@ -245,8 +249,8 @@ export function buildBubblewrapInvocation({
     '--unshare-uts',
     '--unshare-cgroup',
     ...(network === 'none' ? ['--unshare-net'] : []),
-    '--uid', '0',
-    '--gid', '0',
+    '--uid', guestIdentity === 'host' ? String(userId) : '0',
+    '--gid', guestIdentity === 'host' ? String(groupId) : '0',
     '--cap-drop', 'ALL',
     '--hostname', hostname,
     ...destinationParents(mounts),

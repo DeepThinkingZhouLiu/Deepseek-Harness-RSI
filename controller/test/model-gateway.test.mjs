@@ -127,6 +127,23 @@ test('Unix socket transport exposes only a synthetic loopback URL', async (t) =>
   assert.equal(response.body.includes('unused-real-key'), false)
 })
 
+test('Anthropic Unix socket exposes relay origin for SDK-owned /v1 path', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'model-gateway-anthropic-unix-'))
+  const socketPath = join(root, 'gateway.sock')
+  const gateway = await startModelGateway({
+    wireProtocol: 'anthropic-messages',
+    upstreamBaseUrl: 'https://provider.invalid/v1',
+    getApiKey: async () => 'unused-real-key',
+    socketPath,
+    publicUrl: 'http://127.0.0.1:43119',
+  })
+  t.after(async () => {
+    await gateway.close()
+    await rm(root, { recursive: true, force: true })
+  })
+  assert.equal(gateway.url, 'http://127.0.0.1:43119')
+})
+
 test('强制可信 Responses 字段、注入真实凭据并透明流式转发安全状态/headers', async (t) => {
   const realKey = 'upstream-real-key-123456'
   const promptSecret = 'PROMPT_MUST_NOT_ENTER_AUDIT'
@@ -246,7 +263,7 @@ test('强制可信 Anthropic Messages 字段、隔离真实凭据并合并流式
     await close(upstream)
   })
 
-  const response = await fetch(`${gateway.url}/messages`, {
+  const response = await fetch(`${gateway.url}/messages?beta=true`, {
     method: 'POST',
     headers: {
       'x-api-key': 'anthropic-local-dummy',
@@ -269,7 +286,7 @@ test('强制可信 Anthropic Messages 字段、隔离真实凭据并合并流式
 
   assert.equal(response.status, 200)
   assert.deepEqual(received, {
-    url: '/v1/messages',
+    url: '/v1/messages?beta=true',
     authorization: undefined,
     apiKey: realKey,
     anthropicVersion: '2023-06-01',
@@ -300,6 +317,16 @@ test('强制可信 Anthropic Messages 字段、隔离真实凭据并合并流式
     body: '{}',
   })
   assert.equal(bearerOnly.status, 401)
+
+  const untrustedQuery = await fetch(`${gateway.url}/messages?beta=false`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': 'anthropic-local-dummy',
+      'content-type': 'application/json',
+    },
+    body: '{}',
+  })
+  assert.equal(untrustedQuery.status, 404)
 })
 
 test('unbounded gateway preserves Harness-owned request budgets', async (t) => {
