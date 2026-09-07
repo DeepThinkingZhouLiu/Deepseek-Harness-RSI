@@ -218,8 +218,50 @@ test('训练集内晋升主表五 Mode 合并原 18+8 为公共 26 题并保持 
     assert.equal(bundle.benchmark.partitions.final.instanceIds.length, 18)
     assert.equal(bundle.updater.id, 'codex-cli')
     assert.equal(bundle.target.id, 'msa-minimal-cowork-rsi')
-    assert.equal(bundle.experiment.models.solver.reasoningEffort, 'high')
+    assert.equal(bundle.experiment.models.solver.reasoningEffort, 'xhigh')
     assert.equal(bundle.experiment.models.updater.reasoningEffort, 'xhigh')
+    assert.equal(bundle.target.solver.runtime.maximumSteps, 12)
+    assert.equal(bundle.environment.solverFailurePolicy, 'verified-candidate-terminal-v1')
+    assert.equal(bundle.environment.task.maximumConcurrentTrials, 6)
+    assert.equal(bundle.environment.modelGateway.image, 'harness-rsi/model-gateway:failure-feedback-final-v1')
+  }
+})
+
+test('加速主表五 Mode 共用平衡 8/0/8 切分并保持 N1/N2-B16', async () => {
+  const expectedFeedback = [
+    'officeval_003', 'officeval_007', 'officeval_017',
+    'officeval_041', 'officeval_073',
+    'officeval_082', 'officeval_086', 'officeval_090',
+  ]
+  const expectedFinal = [
+    'officeval_011', 'officeval_026', 'officeval_033',
+    'officeval_051', 'officeval_070',
+    'officeval_088', 'officeval_089', 'officeval_097',
+  ]
+  for (const mode of MODES) {
+    const bundle = await loadExperimentBundle(
+      resolve(
+        REPOSITORY_ROOT,
+        `experiments/cowork-msa-main16-in-sample8-codex-${mode}.json`,
+      ),
+      REPOSITORY_ROOT,
+    )
+    const population = bundle.recipe.spec.population
+    assert.equal(population.mode, mode)
+    assert.equal(population.concurrency.n_branches, mode === 'single' ? 1 : 2)
+    assert.equal(population.budget.total_budget, 16)
+    assert.equal(bundle.recipe.spec.moduleSearch.riskCeiling, 'l3')
+    assert.equal(bundle.policy.decisionPartition, 'feedback')
+    assert.deepEqual(bundle.benchmark.partitions.feedback.instanceIds, expectedFeedback)
+    assert.deepEqual(bundle.benchmark.partitions.selection.instanceIds, [])
+    assert.deepEqual(bundle.benchmark.partitions.final.instanceIds, expectedFinal)
+    assert.equal(bundle.benchmark.partitions.final.visibility, 'sealed')
+    assert.equal(bundle.updater.id, 'codex-cli')
+    assert.equal(bundle.target.id, 'msa-minimal-cowork-rsi')
+    assert.equal(bundle.target.solver.runtime.maximumSteps, 12)
+    assert.equal(bundle.experiment.models.solver.reasoningEffort, 'xhigh')
+    assert.equal(bundle.experiment.models.updater.reasoningEffort, 'xhigh')
+    assert.equal(bundle.environment.solverFailurePolicy, 'verified-candidate-terminal-v1')
   }
 })
 

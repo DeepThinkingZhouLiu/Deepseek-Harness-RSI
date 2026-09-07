@@ -19,6 +19,11 @@ const SUITE_PROFILES = Object.freeze({
     experimentStem: 'cowork-msa-main16-in-sample-codex',
     requiresSharedBaselinePack: true,
   }),
+  'main16-in-sample8': Object.freeze({
+    defaultSuiteId: 'cowork-main16-insample8-codex-terra-xhigh-seed20260827-v1',
+    experimentStem: 'cowork-msa-main16-in-sample8-codex',
+    requiresSharedBaselinePack: true,
+  }),
   formal32: Object.freeze({
     defaultSuiteId: 'cowork-formal32-codex-terra-high-seed20260827-v1',
     experimentStem: 'cowork-msa-rsi-formal32-codex',

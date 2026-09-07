@@ -1,7 +1,7 @@
 {
   "apiVersion": "harness-rsi/v1alpha1",
   "kind": "EvolutionExperiment",
-  "metadata": { "id": "cowork-msa-main16-in-sample-codex-single" },
+  "metadata": { "id": "cowork-msa-main16-in-sample8-codex-single" },
   "spec": {
     "recipe": "recipes/population-main-linear-16/single.yml",
     "adapters": {
@@ -11,7 +11,7 @@
       "provider": "adapters/providers/zcloud-openai.yml",
       "strategy": "adapters/strategies/linear-hill-climb.yml"
     },
-    "benchmark": "benchmarks/cowork-omegause-officeval-train26-test18-v1/benchmark.json",
+    "benchmark": "benchmarks/cowork-omegause-officeval-train8-test8-v1/benchmark.json",
     "policy": "evaluation/policies/cowork-officeval-in-sample-rsi.json",
     "models": {
       "solver": { "provider": "zcloud-openai", "model": "gpt-5.6-terra", "maxTokens": 8192, "reasoningEffort": "xhigh" },
