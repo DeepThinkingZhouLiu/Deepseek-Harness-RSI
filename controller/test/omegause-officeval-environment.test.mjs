@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -32,6 +32,19 @@ test('OmegaUse 受控并发不超过上限且保持 Benchmark 顺序', async () 
   })
   assert.equal(maximumActive, 2)
   assert.deepEqual(result, [30, 5, 20, 1])
+})
+
+test('OmegaUse 单题失败后停止派发新题，等待已有题安全收尾', async () => {
+  const started = []
+  let drained = false
+  await assert.rejects(concurrentMap([1, 2, 3, 4], 2, async (id) => {
+    started.push(id)
+    if (id === 1) throw new ProtocolError('fixture failure')
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10))
+    drained = true
+  }), /fixture failure/u)
+  assert.deepEqual(started, [1, 2])
+  assert.equal(drained, true)
 })
 
 function digest(value) {
@@ -96,6 +109,63 @@ test('OmegaUse 连续分数按 Dim1 门槛归一化到 [0,1]', () => {
     () => normalizeOmegaUseVerifierReward(verifierResult({ max_score: 0 })),
     /max_score 必须为正数/u,
   )
+})
+
+test('OmegaUse Solver 重试恢复冻结输入，Verifier 重试复用交付物，不重复求解或改分', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-officeval-stage-retry-'))
+  const input = join(root, 'input.docx')
+  await writeFile(input, 'frozen-input')
+  let solverCalls = 0
+  let verifierCalls = 0
+  const environment = new OmegaUseOfficeValEnvironment({
+    runRoot: root, repositoryRoot,
+    environment: {
+      task: { workspacePath: '/workspace', workspaceLimits: {
+        maximumFiles: 10, maximumBytes: 1024, maximumFileBytes: 1024,
+        maximumChangedFiles: 10, maximumChangedBytes: 1024,
+      } },
+      docker: { resources: { timeoutSeconds: 10 } },
+      feedback: { maximumTextBytesPerCase: 1024 },
+    },
+    solverDriver: { async run({ taskWorkspace, sessionRoot }) {
+      solverCalls += 1
+      await mkdir(sessionRoot)
+      assert.equal(await readFile(join(taskWorkspace, 'input.docx'), 'utf8'), 'frozen-input')
+      if (solverCalls === 1) {
+        await writeFile(join(taskWorkspace, 'input.docx'), 'partial-edit')
+        await writeFile(join(taskWorkspace, 'partial.docx'), 'partial')
+        await writeFile(join(sessionRoot, 'agent.jsonl'), 'partial-trace')
+        throw new ProtocolError('model gateway returned retryable HTTP 503')
+      }
+      assert.deepEqual(await readdir(taskWorkspace), ['input.docx'])
+      await writeFile(join(taskWorkspace, 'done.docx'), 'done')
+      return { answer: 'done' }
+    } },
+  })
+  environment.ensureRuntime = async () => ({ solverImage: 'fixture' })
+  environment.runVerifier = async ({ submission, logs, verifierCode }) => {
+    verifierCalls += 1
+    await Promise.all([mkdir(logs), mkdir(verifierCode)])
+    assert.deepEqual(await readdir(submission), ['done.docx'])
+    if (verifierCalls === 1) {
+      const error = new ProtocolError('fixture timeout')
+      error.processResult = { timedOut: true }
+      throw error
+    }
+    return verifierResult({ total_score: 0 })
+  }
+  const result = await environment.runTrial({
+    candidateId: 'h0', candidateWorkspace: root, model: {}, partition: 'feedback',
+    seed: 1, trialIndex: 0, executionId: 'fixture',
+    layout: { instanceId: 'officeval_001', task: { instruction: 'fixture' },
+      inputs: [{ name: 'input.docx', source: input, record: { bytes: 12, sha256: digest('frozen-input') } }] },
+  })
+  assert.equal(solverCalls, 2)
+  assert.equal(verifierCalls, 2)
+  assert.equal(result.reward, 0)
+  assert.equal(await readFile(join(result.trialRoot, 'solver-attempt-1/workspace/input.docx'), 'utf8'), 'partial-edit')
+  assert.equal(await readFile(join(result.trialRoot, 'solver-attempt-1/solver-session/agent.jsonl'), 'utf8'), 'partial-trace')
+  assert.deepEqual((await readdir(join(result.trialRoot, 'diagnostics'))).sort(), ['solver-1.json', 'verifier-1.json'])
 })
 
 test('OmegaUse 按题提交断点，恢复时保留 0 分结果并只补跑未完成题', async () => {

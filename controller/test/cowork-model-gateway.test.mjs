@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import test from 'node:test'
 import {
   buildModelGatewayImage,
@@ -167,6 +170,8 @@ test('Model Gateway 并发准备只构建一次且绑定定义摘要', async () 
 
 test('Model Gateway 可复用服务文件一致的旧 v1 镜像', async () => {
   let builds = 0
+  const source = await readFile(resolve(REPOSITORY_ROOT, 'docker/model-gateway/server.mjs'))
+  let imageDigest = createHash('sha256').update(source).digest('hex')
   const docker = {
     async imageExists() { return true },
     async imageLabel(_image, label) {
@@ -174,7 +179,7 @@ test('Model Gateway 可复用服务文件一致的旧 v1 镜像', async () => {
       return null
     },
     async imageFileDigest() {
-      return 'da3e1e846e41739162cbd2d71546810b55316ba136f9d4f0034cd7809d65da49'
+      return imageDigest
     },
     async build() { builds += 1 },
   }
@@ -184,6 +189,13 @@ test('Model Gateway 可复用服务文件一致的旧 v1 镜像', async () => {
     repositoryRoot: REPOSITORY_ROOT,
   })
   assert.equal(builds, 0)
+  imageDigest = '0'.repeat(64)
+  await buildModelGatewayImage({
+    config: { image: 'gateway:legacy-test', dockerfile: 'docker/model-gateway/Dockerfile' },
+    docker,
+    repositoryRoot: REPOSITORY_ROOT,
+  })
+  assert.equal(builds, 1)
 })
 
 test('Model Gateway Usage 差分会把未知响应标成不完整', () => {

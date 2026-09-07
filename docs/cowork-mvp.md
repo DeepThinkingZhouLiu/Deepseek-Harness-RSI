@@ -93,6 +93,22 @@ re-hashed after staging. A well-formed upstream `status:error` is a legitimate
 candidate zero. Import failures, process errors, protocol corruption, or source
 drift are infrastructure failures and fail closed.
 
+Transient Solver and Verifier failures receive at most three attempts, including
+the initial attempt. Each failure is immediately saved under the trial's
+`diagnostics/<stage>-<attempt>.json`, with redacted stderr, exit status, timeout
+state, and retry decision. Solver retries archive the failed workspace and trace
+and restart from frozen inputs; Verifier retries reuse the submission. Valid zero
+or partial scores are never retried. Once retries are exhausted, the scheduler
+stops dispatching new tasks, drains active tasks, and pauses the partition without
+converting infrastructure errors into scores. Per-task terminal events exclude
+the sealed Final partition.
+
+Cowork-Bench judges import local modules only from their trusted read-only tests
+directory. Solver and Judge LibreOffice profiles use the container-private
+`/tmp/libreoffice-profile`. The Chat Gateway removes `n` and uses the default
+single response; some compatible upstreams return reasoning without content when
+`n=1` is explicitly supplied.
+
 ## Configuration
 
 ```text

@@ -166,6 +166,21 @@ test('MSA Cowork Solver 只读挂 Candidate/Skill，只写任务与独立输出�
   assert.doesNotMatch(await readFile(join(fixture.sessionRoot, 'answer.txt'), 'utf8'), /fixture-dummy-token/u)
 })
 
+test('MSA 退出成功但缺少 Answer 时仍保留脱敏的 stderr', async () => {
+  const fixture = await trialFixture('rsi-msa-missing-answer-')
+  await assert.rejects(runMsaMinimalCoworkSolver({
+    docker: { async run() { return {
+      exitCode: 0, stderr: `missing answer ${modelAccess.secretEnvironment.RSI_PROVIDER_API_KEY}`,
+    } } },
+    runtime, image: 'fixture', model, provider, ...fixture, modelAccess,
+    task: 'fixture', name: 'missing-answer', timeoutMs: 1000,
+  }), (error) => {
+    assert.equal(error.processResult.exitCode, 0)
+    assert.equal(error.processResult.stderr, 'missing answer [REDACTED]')
+    return /MSA Solver Answer/u.test(error.message)
+  })
+})
+
 test('MSA Cowork Solver 在进入 Docker 前拒绝越界的可信步数上限', async () => {
   const fixture = await trialFixture('rsi-msa-cowork-invalid-steps-')
   let invoked = false

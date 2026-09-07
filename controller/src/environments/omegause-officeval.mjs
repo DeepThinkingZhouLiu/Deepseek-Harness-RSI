@@ -8,6 +8,7 @@ import {
   readFile,
   readdir,
   realpath,
+  rename,
   writeFile,
 } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -18,6 +19,7 @@ import { safeDockerName } from '../docker.mjs'
 import { withGlobalPermit } from '../global-concurrency.mjs'
 import { ProtocolError, validateResultRecords } from '../protocol.mjs'
 import { runProcess } from '../process.mjs'
+import { runTrialStage, trialProgress, writeTrialFailure } from '../trial-stage-runner.mjs'
 import {
   commitTrialCheckpoint,
   inspectTrialCheckpoint,
@@ -648,9 +650,21 @@ export class OmegaUseOfficeValEnvironment {
     const runtime = await this.ensureRuntime()
     const instruction = trustedTaskInstruction(layout.task, layout.inputs.map((input) => input.name))
     const startedAt = Date.now()
-    let solver
-    try {
-      solver = await withGlobalPermit('solver', () => this.solverDriver.run({
+    const context = { candidateId, partition, instanceId: layout.instanceId, seed }
+    const solver = await runTrialStage({
+      trialRoot, context, stage: 'solver',
+      prepareRetry: async (attempt) => {
+        // 重试从冻结输入重新开始，失败工作区和轨迹完整归档。
+        const archive = join(trialRoot, `solver-attempt-${attempt}`)
+        await mkdir(archive, { mode: 0o700 })
+        for (const path of [workspace, sessionRoot]) {
+          await rename(path, join(archive, basename(path))).catch((error) => {
+            if (error.code !== 'ENOENT') throw error
+          })
+        }
+        await materializeInputs(layout, workspace)
+      },
+      operation: () => withGlobalPermit('solver', () => this.solverDriver.run({
         image: runtime.solverImage,
         model,
         candidateWorkspace,
@@ -661,15 +675,8 @@ export class OmegaUseOfficeValEnvironment {
         name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-solver`,
         timeoutMs: this.environment.docker.resources.timeoutSeconds * 1000,
         containerWorkspace: this.environment.task.workspacePath,
-      }))
-    } catch (cause) {
-      throw new ProtocolError('OmegaUse Solver 基础设施失败', [
-        cause?.message ?? String(cause),
-        ...(cause?.details ?? []),
-        `candidate=${candidateId}`,
-        `task=${layout.instanceId}`,
-      ])
-    }
+      })),
+    })
 
     let artifacts = []
     let policyViolation = null
@@ -695,22 +702,16 @@ export class OmegaUseOfficeValEnvironment {
       await mkdir(submission, { recursive: false, mode: 0o700 })
     } else {
       await materializeSubmission(workspace, artifacts, submission)
-      try {
-        result = await this.runVerifier({
+      result = await runTrialStage({
+        trialRoot, context, stage: 'verifier',
+        operation: (attempt) => this.runVerifier({
           layout,
           submission,
-          logs,
-          verifierCode,
+          logs: attempt === 1 ? logs : `${logs}-attempt-${attempt}`,
+          verifierCode: attempt === 1 ? verifierCode : `${verifierCode}-attempt-${attempt}`,
           name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-verifier`,
-        })
-      } catch (cause) {
-        throw new ProtocolError('OmegaUse Verifier 基础设施失败', [
-          cause?.message ?? String(cause),
-          ...(cause?.details ?? []),
-          `candidate=${candidateId}`,
-          `task=${layout.instanceId}`,
-        ])
-      }
+        }),
+      })
     }
     const reward = normalizeOmegaUseVerifierReward(result)
     const feedback = verifierFeedback(result, this.environment.feedback.maximumTextBytesPerCase)
@@ -842,6 +843,7 @@ export class OmegaUseOfficeValEnvironment {
           pending,
           this.environment.task.maximumConcurrentTrials ?? 1,
           async ({ layout, taskRoot, identity, validateCheckpointRecord, checkpoint }) => {
+            const context = { candidateId, partition, instanceId: layout.instanceId }
             if (checkpoint.status !== 'missing') {
               await quarantineTrialTask({
                 runRoot: this.runRoot,
@@ -851,29 +853,40 @@ export class OmegaUseOfficeValEnvironment {
                   : 'task-attempt-incomplete',
               })
             }
-            const trials = []
-            for (const [trialIndex, seed] of seeds.entries()) {
-              trials.push(await this.runTrial({
-                candidateId,
-                candidateWorkspace: candidate,
+            trialProgress(context, 'started')
+            try {
+              const trials = []
+              for (const [trialIndex, seed] of seeds.entries()) {
+                trials.push(await this.runTrial({
+                  candidateId,
+                  candidateWorkspace: candidate,
+                  layout,
+                  model,
+                  partition,
+                  seed,
+                  trialIndex,
+                  executionId,
+                }))
+              }
+              const record = recordForTask({
                 layout,
-                model,
                 partition,
-                seed,
-                trialIndex,
-                executionId,
-              }))
+                trials,
+                runRoot: this.runRoot,
+                feedbackLimit: this.environment.feedback.maximumTextBytesPerCase,
+              })
+              await validateCheckpointRecord(record)
+              await commitTrialCheckpoint({ runRoot: this.runRoot, taskRoot, identity, record })
+              freshRecords.set(layout.instanceId, record)
+              trialProgress(context, 'committed')
+            } catch (error) {
+              await writeTrialFailure({
+                root: taskRoot, file: 'task-failure.json', context,
+                stage: error.stage ?? 'task', attempt: 1, error, willRetry: false,
+              })
+              trialProgress(context, 'failed', { stage: error.stage ?? 'task' })
+              throw error
             }
-            const record = recordForTask({
-              layout,
-              partition,
-              trials,
-              runRoot: this.runRoot,
-              feedbackLimit: this.environment.feedback.maximumTextBytesPerCase,
-            })
-            await validateCheckpointRecord(record)
-            await commitTrialCheckpoint({ runRoot: this.runRoot, taskRoot, identity, record })
-            freshRecords.set(layout.instanceId, record)
           },
         )
       } catch (error) {
@@ -907,7 +920,8 @@ export async function concurrentMap(values, maximumConcurrency, operation) {
   const failures = []
   let cursor = 0
   async function worker() {
-    while (cursor < values.length) {
+    // 任一不可恢复错误后不再派发新题，等待已在运行的题安全完成并提交。
+    while (cursor < values.length && failures.length === 0) {
       const index = cursor
       cursor += 1
       try {

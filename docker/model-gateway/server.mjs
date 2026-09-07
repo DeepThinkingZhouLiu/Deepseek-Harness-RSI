@@ -297,7 +297,9 @@ function trustedRequestBody(rawBody, policy) {
   if (policy.reasoningEffort !== null) output.reasoning_effort = policy.reasoningEffort
   // 受信角色只能请求一个、必然返回 Usage 的流式 Completion。
   // 覆盖而不信任 Agent 提交的同名字段，避免放大生成数或绕过计量。
-  output.n = 1
+  // 去掉 Candidate 的 n，使用 Chat Completions 默认的单条响应。
+  // 实测部分兼容上游在显式 n=1 时只返回 reasoning，丢失正文。
+  delete output.n
   output.stream = true
   output.stream_options = { include_usage: true }
   return Buffer.from(JSON.stringify(output))
