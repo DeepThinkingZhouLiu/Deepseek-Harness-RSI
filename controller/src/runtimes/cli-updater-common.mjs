@@ -227,6 +227,8 @@ export function createCliUsageLedger() {
 }
 
 export function recordCliUsageAudit(usage, record) {
+  // CLI 可能先访问健康检查等本地路由；只有真正进入上游的请求才属于模型 Usage。
+  if (record?.origin !== 'upstream') return
   usage.requests += 1
   const observed = record.usage
   if (!observed
