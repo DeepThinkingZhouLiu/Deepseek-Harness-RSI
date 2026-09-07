@@ -57,6 +57,12 @@ function safeTaskPath(root, taskPath, label) {
   return pathValue
 }
 
+export function adaptCoworkWorkspaceInstruction(instruction, workspacePath) {
+  return instruction
+    .replaceAll('/app/data/input_files', workspacePath)
+    .replaceAll('/app/output', workspacePath)
+}
+
 async function listInputFiles(root) {
   const files = []
   async function visit(directory) {
@@ -178,7 +184,13 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
     return Object.freeze({
       instanceId,
       taskRoot,
-      task: { id: instanceId, instruction: instruction.trim() },
+      task: {
+        id: instanceId,
+        instruction: adaptCoworkWorkspaceInstruction(
+          instruction.trim(),
+          this.environment.task.workspacePath,
+        ),
+      },
       record: { verifier: { path: 'tests/judge.py' } },
       inputs: inputRecords,
       judge,
