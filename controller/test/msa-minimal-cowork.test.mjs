@@ -582,6 +582,9 @@ test('MSA Cowork Candidate 不把空 Final 或空 Bash 当成有效动作', asyn
     '  "empty_final": Agent.parse("<final>   </final>"),',
     '  "empty_bash": Agent.parse("<bash>\\n\\t</bash>"),',
     '  "valid_final": Agent.parse("<final>done</final>"),',
+    '  "bash_before_image": Agent.parse("<bash>touch result.docx</bash><view_image>result.png</view_image>"),',
+    '  "image_before_final": Agent.parse("<view_image>result.png</view_image><final>done</final>"),',
+    '  "bash_before_final": Agent.parse("<bash>touch result.docx</bash><final>done</final>"),',
     '}))',
   ].join('\n')
   const { stdout } = await executeFile('python3', ['-c', script], {
@@ -592,6 +595,54 @@ test('MSA Cowork Candidate 不把空 Final 或空 Bash 当成有效动作', asyn
   assert.equal(result.empty_final, null)
   assert.equal(result.empty_bash, null)
   assert.deepEqual(result.valid_final, ['final', 'done'])
+  assert.deepEqual(result.bash_before_image, ['bash', 'touch result.docx'])
+  assert.deepEqual(result.image_before_final, ['view_image', 'result.png'])
+  assert.deepEqual(result.bash_before_final, ['bash', 'touch result.docx'])
+})
+
+test('MSA Cowork Candidate 对多动作响应只执行最先出现的动作', async () => {
+  const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'rsi-msa-first-action-'))
+  const profileRoot = join(fixtureRoot, 'profiles')
+  const tracePath = join(fixtureRoot, 'agent.jsonl')
+  await mkdir(profileRoot)
+  await writeFile(join(profileRoot, 'cowork.md'), 'fixture prompt\n')
+  await writeFile(join(profileRoot, 'cowork.json'), `${JSON.stringify({
+    max_steps: 2,
+    max_output_tokens: 1024,
+    maximum_skill_files: 1,
+    maximum_skill_chars: 1024,
+    command_timeout_seconds: 1,
+    max_observation_chars: 1024,
+  })}\n`)
+  const script = [
+    'import copy, json, pathlib, sys, types',
+    `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'sys.modules["model"] = types.SimpleNamespace(query=lambda *args: "unused")',
+    'sys.modules["tools"] = types.SimpleNamespace(run_bash=lambda *args: "unused")',
+    'import agent',
+    'replies = iter([',
+    '  "prefix <bash>printf ok</bash><view_image>missing.png</view_image><final>not-done</final>",',
+    '  "<final>done</final>",',
+    '])',
+    'requests = []',
+    'commands = []',
+    'agent.query = lambda *args: requests.append(copy.deepcopy(args[3])) or next(replies)',
+    'agent.run_bash = lambda command, *args: commands.append(command) or "command-ok"',
+    `runner = agent.Agent(pathlib.Path(${JSON.stringify(fixtureRoot)}), "cowork", "http://gateway", "dummy", "fixture", 1024, 2, pathlib.Path(${JSON.stringify(tracePath)}))`,
+    `answer = runner.run("fixture task", pathlib.Path(${JSON.stringify(fixtureRoot)}))`,
+    'print(json.dumps({"answer": answer, "commands": commands, "second_messages": requests[1]}))',
+  ].join('\n')
+  const { stdout } = await executeFile('python3', ['-c', script], {
+    env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+  })
+  const result = JSON.parse(stdout)
+
+  assert.equal(result.answer, 'done')
+  assert.deepEqual(result.commands, ['printf ok'])
+  assert.equal(result.second_messages[2].content, '<bash>\nprintf ok\n</bash>')
+  assert.doesNotMatch(result.second_messages[2].content, /view_image|not-done/u)
+  assert.match(result.second_messages[3].content, /command-ok/u)
 })
 
 test('MSA Cowork Chat Client 对正常结束的空流最多重试两次', async (context) => {

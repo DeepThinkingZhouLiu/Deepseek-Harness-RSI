@@ -109,23 +109,23 @@ class Agent:
 
     @staticmethod
     def parse(reply: str) -> tuple[str, str] | None:
-        final = FINAL_PATTERN.search(reply)
-        if final:
-            content = final.group(1).strip()
-            if content:
-                return "final", content
-        image = IMAGE_PATTERN.search(reply)
-        if image:
-            content = image.group(1).strip()
-            if content:
-                return "view_image", content
-        for pattern in BASH_PATTERNS:
-            action = pattern.search(reply)
-            if action:
-                content = action.group(1).strip()
+        actions: list[tuple[int, int, str, str]] = []
+        patterns = (
+            ("bash", BASH_PATTERNS[0]),
+            ("bash", BASH_PATTERNS[1]),
+            ("view_image", IMAGE_PATTERN),
+            ("final", FINAL_PATTERN),
+        )
+        for order, (kind, pattern) in enumerate(patterns):
+            match = pattern.search(reply)
+            if match:
+                content = match.group(1).strip()
                 if content:
-                    return "bash", content
-        return None
+                    actions.append((match.start(), order, kind, content))
+        if not actions:
+            return None
+        _, _, kind, content = min(actions)
+        return kind, content
 
     def run(self, task: str, workspace: Path) -> str:
         messages = [
@@ -146,7 +146,14 @@ class Agent:
             parsed = self.parse(reply)
             if parsed and parsed[0] == "final":
                 return parsed[1]
-            messages.append({"role": "assistant", "content": reply})
+            # 部分兼容模型会在一次响应里输出多个动作。Controller 只执行文本中
+            # 最先出现的动作，并只把该动作写回上下文，避免模型误以为后续动作已执行。
+            assistant_content = reply
+            if parsed and parsed[0] == "bash":
+                assistant_content = f"<bash>\n{parsed[1]}\n</bash>"
+            elif parsed and parsed[0] == "view_image":
+                assistant_content = f"<view_image>{parsed[1]}</view_image>"
+            messages.append({"role": "assistant", "content": assistant_content})
             if parsed and parsed[0] == "bash":
                 observation = run_bash(
                     parsed[1],
