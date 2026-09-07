@@ -10,7 +10,7 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const sourceRoot = resolve(process.argv[2] ?? process.env.RSI_COWORK_BENCH_DATASET_ROOT ?? '')
-const releaseId = 'cowork-evo-240-v0.1'
+const releaseId = 'cowork-evo-240-v0.2'
 const outputRoot = join(repositoryRoot, 'benchmarks', 'cowork-bench-240')
 
 if (!process.argv[2] && !process.env.RSI_COWORK_BENCH_DATASET_ROOT) {
@@ -100,7 +100,7 @@ const benchmark = {
   apiVersion: 'harness-rsi/v1alpha1',
   kind: 'Benchmark',
   metadata: {
-    id: 'cowork-bench-240-v0.1',
+    id: 'cowork-bench-240-v0.2',
     name: 'CoworkEvoBench 240 full GRHS benchmark',
   },
   spec: {

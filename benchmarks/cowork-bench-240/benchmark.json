@@ -2,15 +2,15 @@
   "apiVersion": "harness-rsi/v1alpha1",
   "kind": "Benchmark",
   "metadata": {
-    "id": "cowork-bench-240-v0.1",
+    "id": "cowork-bench-240-v0.2",
     "name": "CoworkEvoBench 240 full GRHS benchmark"
   },
   "spec": {
     "source": {
       "adapter": "cowork-bench",
       "dataset": "DeepThinkingZhouLiu/cowork-evolution-benchmark",
-      "split": "benchmarks/cowork-evo-240-v0.1",
-      "revision": "59ee4f18b4a25f589df71652e1292cee3e115421"
+      "split": "benchmarks/cowork-evo-240-v0.2",
+      "revision": "aac0f28d4596eefbc50041b54ba3bbadf59d6f1b"
     },
     "evaluator": {
       "adapter": "cowork-bench",

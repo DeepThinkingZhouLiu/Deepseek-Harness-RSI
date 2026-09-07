@@ -8,10 +8,10 @@ spec:
   source:
     datasetRootEnvironment: RSI_COWORK_BENCH_DATASET_ROOT
     evaluatorRootEnvironment: RSI_COWORK_BENCH_EVALUATOR_ROOT
-    datasetRevision: 59ee4f18b4a25f589df71652e1292cee3e115421
-    evaluatorRevision: 59ee4f18b4a25f589df71652e1292cee3e115421
+    datasetRevision: aac0f28d4596eefbc50041b54ba3bbadf59d6f1b
+    evaluatorRevision: aac0f28d4596eefbc50041b54ba3bbadf59d6f1b
     manifestPath: benchmarks/cowork-bench-240/task-manifest.json
-    manifestDigest: 47141309695cb1d6bfad692b7146e6ee6ecbcb05df76200a8818fcea4545b4c0
+    manifestDigest: 7183e1f2b9465271da2f5ac5d403892e631c849edfedc76ffd620165ae6cbb73
   task:
     workspacePath: /workspace
     environmentAssets: environments/omegause-officeval-assets
@@ -23,7 +23,7 @@ spec:
       maximumChangedFiles: 2048
       maximumChangedBytes: 536870912
   runtime:
-    image: harness-rsi/cowork-bench:240-v0.1
+    image: harness-rsi/cowork-bench:240-v0.2
     dockerfile: docker/cowork-bench/Dockerfile
     verifierRunner: docker/cowork-bench/run-verifier.py
   docker:
