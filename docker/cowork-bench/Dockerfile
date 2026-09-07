@@ -16,7 +16,8 @@ RUN sed -i "s#http://deb.debian.org/debian#${DEBIAN_MIRROR}#g" /etc/apt/sources.
 
 RUN python -m pip install --no-cache-dir --index-url "${PYPI_INDEX_URL}" \
     python-docx==1.2.0 lxml==5.4.0 openpyxl==3.1.5 \
-    python-pptx==1.0.2 Pillow==11.2.1
+    python-pptx==1.0.2 Pillow==11.2.1 pypinyin==0.55.0 \
+    numpy==2.3.2 pandas==2.3.2
 
 ARG COWORK_BENCH_RUNTIME_REVISION=unknown
 LABEL io.harness-rsi.runtime="cowork-bench-docker-v1" \

@@ -14,7 +14,7 @@ spec:
   materialization:
     strategy: source-plus-seed-overlay
     seedPath: targets/msa-minimal/cowork-v1
-    seedDigest: 73086a075b5ec682a771c9d1c9a62c23b9ccad32af44dc337d7e651eb5d416ae
+    seedDigest: a5f76174c2b03178bb0020fdf4030d765872b67862ba43a2ddbc7ef712b29c35
     overrides:
       - agent.py
       - image_tool.py
@@ -83,8 +83,8 @@ spec:
           max_steps: 12
           command_timeout_seconds: 600
           max_observation_chars: 131072
-          # Model Gateway 会按正式 Experiment 固定为 8192，Candidate 不能声明更高的无效值。
-          max_output_tokens: 8192
+          # 不再施加 8192 的人工小上限；使用当前可信网关协议支持的最高输出预算。
+          max_output_tokens: 65536
           maximum_skill_files: 128
           maximum_skill_chars: 524288
           max_image_bytes: 4194304

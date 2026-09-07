@@ -26,9 +26,9 @@ test('五种 Cowork RSI 配置使用同一正式起点、严格评测与总预�
       bundle.target.mutation.semanticChecks.profile.maximums.max_steps,
       bundle.target.solver.runtime.maximumSteps,
     )
-    assert.equal(
-      bundle.target.mutation.semanticChecks.profile.maximums.max_output_tokens,
-      bundle.experiment.models.solver.maxTokens,
+    assert.ok(
+      bundle.target.mutation.semanticChecks.profile.maximums.max_output_tokens
+        >= bundle.experiment.models.solver.maxTokens,
     )
     assert.equal(bundle.environment.id, 'omegause-officeval')
     assert.equal(bundle.environment.task.maximumConcurrentTrials, 4)

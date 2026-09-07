@@ -138,6 +138,24 @@ test('Cowork-Bench GRHS 可将 Claude Sonnet 5 独立配置为 Updater', async (
   assert.equal(bundle.experiment.models.updater.model, 'claude-sonnet-5')
 })
 
+test('Cowork-Bench 240 正式实验固定为 N1-K4-B4 和三段式全量划分', async () => {
+  const bundle = await loadExperimentBundle(
+    resolve(repositoryRoot, 'experiments/cowork-bench-grhs-full-claude-single-b4.json'),
+    repositoryRoot,
+  )
+  assert.equal(bundle.recipe.spec.population.concurrency.n_branches, 1)
+  assert.equal(bundle.recipe.spec.population.budget.total_budget, 4)
+  assert.equal(bundle.recipe.spec.moduleSearch.group.size, 4)
+  assert.equal(bundle.recipe.spec.moduleSearch.riskCeiling, 'l3')
+  assert.deepEqual(bundle.recipe.spec.checkpointing.budgetMilestones, [0, 4])
+  assert.equal(bundle.benchmark.partitions.feedback.instanceIds.length, 90)
+  assert.equal(bundle.benchmark.partitions.selection.instanceIds.length, 30)
+  assert.equal(bundle.benchmark.partitions.final.instanceIds.length, 120)
+  assert.equal(bundle.environment.task.maximumConcurrentTrials, 2)
+  assert.equal(bundle.experiment.models.solver.maxTokens, 65536)
+  assert.equal(bundle.experiment.models.updater.maxTokens, 65536)
+})
+
 test('Experiment 拒绝 provider/providers 同时声明与 Updater Provider 协议错配', async () => {
   const config = await readConfigFile(resolve(
     repositoryRoot,

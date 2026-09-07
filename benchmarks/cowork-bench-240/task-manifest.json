@@ -1,0 +1,1207 @@
+{
+  "apiVersion": "harness-rsi/cowork-bench-manifest-v1",
+  "repositoryRevision": "59ee4f18b4a25f589df71652e1292cee3e115421",
+  "taskTreeGitOid": "26eebd4b74efe936c40b05e867ce5b1e18379b02",
+  "tasks": [
+    {
+      "id": "cowork-evo/agentcompany-budget-variance-analysis",
+      "path": "tasks/xlsx/agentcompany-budget-variance-analysis",
+      "contentSha256": "07e80f7438a5efd8dfaea5f2db2ceabb0d303659c21b8c6d6676448ce415fa9d"
+    },
+    {
+      "id": "cowork-evo/agentcompany-respondent-format",
+      "path": "tasks/xlsx/agentcompany-respondent-format",
+      "contentSha256": "edec70f07735a28a46fcb12d8f3b5c000ef71619bbac3ea0b59cb59d51c63ec8"
+    },
+    {
+      "id": "cowork-evo/automation-budget-prep",
+      "path": "tasks/xlsx/automation-budget-prep",
+      "contentSha256": "bc2d276f90b51394a864e2aa6ab6d532d9c00388f23960f8f8d6fe3309d62fb7"
+    },
+    {
+      "id": "cowork-evo/automation-cashflow",
+      "path": "tasks/xlsx/automation-cashflow",
+      "contentSha256": "ea08b4b7d9ed0becf692c36f0ccd66d8ecd22256338b12e69565c0d2cffb6cc8"
+    },
+    {
+      "id": "cowork-evo/automation-gl-variance",
+      "path": "tasks/xlsx/automation-gl-variance",
+      "contentSha256": "67d2143a8e8f1d98c0ec834d5fba6b534c2839a6e9b7793a15de6fd6e232a431"
+    },
+    {
+      "id": "cowork-evo/automation-vendor-recon",
+      "path": "tasks/xlsx/automation-vendor-recon",
+      "contentSha256": "d6661a1312e9f1eeccc8bcba841898792cc31761a93b0bf527099b09e3d79bf7"
+    },
+    {
+      "id": "cowork-evo/automationbench-1115-stratacorp-competitive-response-deck",
+      "path": "tasks/ppt/automationbench-1115-stratacorp-competitive-response-deck",
+      "contentSha256": "0ef1b79179b67b6e6e9dfea7850d904e26b2bb9c53f569e0d5cbc605ce62ef42"
+    },
+    {
+      "id": "cowork-evo/automationbench-1202-q1-renewal-control-package",
+      "path": "tasks/cross_office/automationbench-1202-q1-renewal-control-package",
+      "contentSha256": "e9ea2763ef8581c7fab140f34ae0b240c0a311f0362fc21db98a3b05ffe45640"
+    },
+    {
+      "id": "cowork-evo/automationbench-4001-ap-invoice-control-package",
+      "path": "tasks/cross_office/automationbench-4001-ap-invoice-control-package",
+      "contentSha256": "ec1b2129863ef53151e72a372c9ff45cfa72e5877f1e8271b0a17445c5f08594"
+    },
+    {
+      "id": "cowork-evo/automationbench-4040-month-end-close-readiness-deck",
+      "path": "tasks/ppt/automationbench-4040-month-end-close-readiness-deck",
+      "contentSha256": "8712d3b2d4b463a1bb5adc8010486fd5e35f2cbca8ff7065a9b7ec772cb06f0a"
+    },
+    {
+      "id": "cowork-evo/automationbench-4044-three-way-match-exception-briefing",
+      "path": "tasks/ppt/automationbench-4044-three-way-match-exception-briefing",
+      "contentSha256": "6b789e86d6f90fdf475a361ec381af4c27e7eac0713d966595a6bc14a0522e96"
+    },
+    {
+      "id": "cowork-evo/automationbench-4062-q4-sales-tax-remittance-briefing",
+      "path": "tasks/ppt/automationbench-4062-q4-sales-tax-remittance-briefing",
+      "contentSha256": "8e33ff3f3d4d243030c3fdb2c9ceeeb394b13ecf1309eec5d20daddeb169c21e"
+    },
+    {
+      "id": "cowork-evo/automationbench-5004-offboarding-control-package",
+      "path": "tasks/cross_office/automationbench-5004-offboarding-control-package",
+      "contentSha256": "721c8930fd8d58d2ee7b73391221aa00a14ab2c2fe7aadf7474d0c00757ed60d"
+    },
+    {
+      "id": "cowork-evo/automationbench-5011-salary-band-compliance-package",
+      "path": "tasks/cross_office/automationbench-5011-salary-band-compliance-package",
+      "contentSha256": "938b207343ed8d1cd2fe013ed357b0e504c96998e61bafebbc7f5bf911915330"
+    },
+    {
+      "id": "cowork-evo/automationbench-5057-multi-app-new-hire-onboarding-package",
+      "path": "tasks/cross_office/automationbench-5057-multi-app-new-hire-onboarding-package",
+      "contentSha256": "2b0565d117a8e082225af5b838e115c9ac06fa525fff5c02a5002bccbd6539df"
+    },
+    {
+      "id": "cowork-evo/automationbench-5070-multi-system-offboarding-package",
+      "path": "tasks/cross_office/automationbench-5070-multi-system-offboarding-package",
+      "contentSha256": "8c4b8e9716f4093868f11d698847e39ab9a9dd5dcdf4a43481829c1a28187629"
+    },
+    {
+      "id": "cowork-evo/automationbench-5090-confidential-access-review-package",
+      "path": "tasks/cross_office/automationbench-5090-confidential-access-review-package",
+      "contentSha256": "7ce2ed613dceb7fae8fd841517fe78c3d39be0076b9f5509b44152e05e88e9dd"
+    },
+    {
+      "id": "cowork-evo/automationbench-5101-salary-adjustment-policy-package",
+      "path": "tasks/cross_office/automationbench-5101-salary-adjustment-policy-package",
+      "contentSha256": "057651ff99be32424c3da637bdee505ea06efdb84a1227baf74a2dbcee39d871"
+    },
+    {
+      "id": "cowork-evo/automationbench-5102-benefits-coverage-audit-package",
+      "path": "tasks/cross_office/automationbench-5102-benefits-coverage-audit-package",
+      "contentSha256": "7f1152d1a8136ff69075fab47c0536e7ce4dc1908846e0a11aea1eb1765b6410"
+    },
+    {
+      "id": "cowork-evo/automationbench-5103-performance-review-governance-package",
+      "path": "tasks/cross_office/automationbench-5103-performance-review-governance-package",
+      "contentSha256": "06e7972272c4742f247bcb70da81b220e975bf8c8d0751873ccd83838708b755"
+    },
+    {
+      "id": "cowork-evo/automationbench-5104-payroll-discrepancy-control-package",
+      "path": "tasks/cross_office/automationbench-5104-payroll-discrepancy-control-package",
+      "contentSha256": "2c27c77498de9bafafe4a346c8d0820e0266cd93c20070b10703d7b67f8ed89f"
+    },
+    {
+      "id": "cowork-evo/automationbench-5105-anniversary-recognition-governance-package",
+      "path": "tasks/cross_office/automationbench-5105-anniversary-recognition-governance-package",
+      "contentSha256": "0360c1ab363d5c0c0a6246e04112bf0d9407aee5f7bb297f91dbaf7ff870cebe"
+    },
+    {
+      "id": "cowork-evo/automationbench-5106-compliance-training-enforcement-package",
+      "path": "tasks/cross_office/automationbench-5106-compliance-training-enforcement-package",
+      "contentSha256": "9021e9c0cedef2d288aa0994d3bc47061dc94da8d9cd411cd29cbb9105f841fb"
+    },
+    {
+      "id": "cowork-evo/automationbench-5107-equipment-provisioning-package",
+      "path": "tasks/cross_office/automationbench-5107-equipment-provisioning-package",
+      "contentSha256": "d892f158e27133783fa97df7c73f5bb48c44842f505d097a568e4d405fd00d09"
+    },
+    {
+      "id": "cowork-evo/automationbench-5108-exit-interview-privacy-control-package",
+      "path": "tasks/cross_office/automationbench-5108-exit-interview-privacy-control-package",
+      "contentSha256": "7894dcce802086d09e4a8b756abd719b1c3434971c83dd587fd6d5630c05261c"
+    },
+    {
+      "id": "cowork-evo/automationbench-5109-referral-bonus-privacy-control-package",
+      "path": "tasks/cross_office/automationbench-5109-referral-bonus-privacy-control-package",
+      "contentSha256": "bf26a637bf4ee6de47191cbe6f79920c1a9bbb395679bea338152075953b9c4e"
+    },
+    {
+      "id": "cowork-evo/automationbench-5110-org-restructure-control-package",
+      "path": "tasks/cross_office/automationbench-5110-org-restructure-control-package",
+      "contentSha256": "a534248bb06d1593d92e525ce4b5fef085de04951778afb675a9d626769db792"
+    },
+    {
+      "id": "cowork-evo/automationbench-5111-pto-reconciliation-privacy-package",
+      "path": "tasks/cross_office/automationbench-5111-pto-reconciliation-privacy-package",
+      "contentSha256": "73013ed9a54aa741f397639f84cea64008087af6cf7f06ef8fd7e0fd62d21b91"
+    },
+    {
+      "id": "cowork-evo/automationbench-5112-promotion-announcement-governance-package",
+      "path": "tasks/cross_office/automationbench-5112-promotion-announcement-governance-package",
+      "contentSha256": "4d40c93e674633f2eb6d0424a5957263a43181a7bc7b9587d16ebdf0e494b6a0"
+    },
+    {
+      "id": "cowork-evo/automationbench-5113-i9-compliance-control-package",
+      "path": "tasks/cross_office/automationbench-5113-i9-compliance-control-package",
+      "contentSha256": "810a773df2bef812de210df0e52fb2009f09082d38d082b74351aa1a1955385c"
+    },
+    {
+      "id": "cowork-evo/automationbench-5114-termination-checklist-governance-package",
+      "path": "tasks/cross_office/automationbench-5114-termination-checklist-governance-package",
+      "contentSha256": "638999f3c72be3d8d59b77bbac9f6c5a2ecb32f6f83d2c77bf0743e49a1768fa"
+    },
+    {
+      "id": "cowork-evo/automationbench-5115-diversity-metrics-privacy-package",
+      "path": "tasks/cross_office/automationbench-5115-diversity-metrics-privacy-package",
+      "contentSha256": "d2a9865c59060f43e6973ae97fea210b593efa821b536a29835e57eeb37ed6d4"
+    },
+    {
+      "id": "cowork-evo/automationbench-5116-buddy-assignment-governance-package",
+      "path": "tasks/cross_office/automationbench-5116-buddy-assignment-governance-package",
+      "contentSha256": "9576a7009e554b3f1bcf03e9e3f8b398540f085853611746dd8631f2d48cbf5a"
+    },
+    {
+      "id": "cowork-evo/automationbench-5117-grievance-routing-confidentiality-package",
+      "path": "tasks/cross_office/automationbench-5117-grievance-routing-confidentiality-package",
+      "contentSha256": "5599cd5f5db794db8740b68e822186586e01d8e56e9ee4b7052d09da56b41403"
+    },
+    {
+      "id": "cowork-evo/automationbench-5118-visa-expiration-control-package",
+      "path": "tasks/cross_office/automationbench-5118-visa-expiration-control-package",
+      "contentSha256": "1ba84919e68e782869719dfc4480e736b3c71f7bc5166a6dfa7f061c5d36ec19"
+    },
+    {
+      "id": "cowork-evo/automationbench-5119-expense-report-control-package",
+      "path": "tasks/cross_office/automationbench-5119-expense-report-control-package",
+      "contentSha256": "43c3435919a971bf2535c290e48d77e1df06d78e3bddb8cf968c99c0be410438"
+    },
+    {
+      "id": "cowork-evo/automationbench-5120-background-check-control-package",
+      "path": "tasks/cross_office/automationbench-5120-background-check-control-package",
+      "contentSha256": "1e6d8c08d94d50c5d599547bccf4e789b803f6dc3db519d817cf003614bfedc3"
+    },
+    {
+      "id": "cowork-evo/automationbench-5121-contractor-renewal-control-package",
+      "path": "tasks/cross_office/automationbench-5121-contractor-renewal-control-package",
+      "contentSha256": "3fb548e87fd0f6bf147eee69d0f2f4ff66ae5b673c0cfb4e045d155780e3dc00"
+    },
+    {
+      "id": "cowork-evo/automationbench-5122-survey-distribution-governance-package",
+      "path": "tasks/cross_office/automationbench-5122-survey-distribution-governance-package",
+      "contentSha256": "6c51c83e89b44edb3653a74d3f89f24d1d9cb5ce66ce3d9f6325329c9f9f53c8"
+    },
+    {
+      "id": "cowork-evo/automationbench-5123-job-posting-governance-package",
+      "path": "tasks/cross_office/automationbench-5123-job-posting-governance-package",
+      "contentSha256": "0e0dedabbf493f3266d6e5dc4569d6d9b9926994bb6055808ec7fa4bcc6111a0"
+    },
+    {
+      "id": "cowork-evo/automationbench-5124-mandatory-all-hands-governance-package",
+      "path": "tasks/cross_office/automationbench-5124-mandatory-all-hands-governance-package",
+      "contentSha256": "1e0f075ba36ef9ca8e2dbec2d63d2a1dff59c82739d756d35a937a9eb35f15f2"
+    },
+    {
+      "id": "cowork-evo/automationbench-5125-data-migration-validation-package",
+      "path": "tasks/cross_office/automationbench-5125-data-migration-validation-package",
+      "contentSha256": "abcce43c9ae5cd7dfa312e22e0f34fcb2ab6948f31aed0d0db0c792d6163ab68"
+    },
+    {
+      "id": "cowork-evo/automationbench-5126-safety-incident-control-package",
+      "path": "tasks/cross_office/automationbench-5126-safety-incident-control-package",
+      "contentSha256": "b7aedf2437fa35d5efdd322ae63407189fc5faaeb0746266c65c9b69f51c1445"
+    },
+    {
+      "id": "cowork-evo/automationbench-5127-tuition-reimbursement-privacy-package",
+      "path": "tasks/cross_office/automationbench-5127-tuition-reimbursement-privacy-package",
+      "contentSha256": "024ba33f9e7c57f655103fd2bb487ec67c191863e6c1dfcb87bcfe0b3713b6de"
+    },
+    {
+      "id": "cowork-evo/automationbench-5128-recognition-governance-package",
+      "path": "tasks/cross_office/automationbench-5128-recognition-governance-package",
+      "contentSha256": "535a8df4ae8d5444edd022ee0ff968b69113ef836738344076f82ec6d556be13"
+    },
+    {
+      "id": "cowork-evo/automationbench-5129-rto-compliance-control-package",
+      "path": "tasks/cross_office/automationbench-5129-rto-compliance-control-package",
+      "contentSha256": "d7ef8dec632e4078ffba2e8395b274c065e30bcb22ab2fe576e4ad295bfef6b2"
+    },
+    {
+      "id": "cowork-evo/automationbench-5130-headcount-confidentiality-package",
+      "path": "tasks/cross_office/automationbench-5130-headcount-confidentiality-package",
+      "contentSha256": "888db09316e67ed2f4144c45fcf2014a713a92b975c5a15978c31aa4ab03c14c"
+    },
+    {
+      "id": "cowork-evo/automationbench-5131-handbook-acknowledgment-control-package",
+      "path": "tasks/cross_office/automationbench-5131-handbook-acknowledgment-control-package",
+      "contentSha256": "fc307234f2acd8a2c6e0f169302596a9dc1c2eb6f284794efc336db52be59856"
+    },
+    {
+      "id": "cowork-evo/automationbench-5132-compensation-adjustment-governance-package",
+      "path": "tasks/cross_office/automationbench-5132-compensation-adjustment-governance-package",
+      "contentSha256": "bc943d011e113644144f71a31945af40338459ae7884b754b9d45572fca3b80d"
+    },
+    {
+      "id": "cowork-evo/automationbench-5133-intern-onboarding-governance-package",
+      "path": "tasks/cross_office/automationbench-5133-intern-onboarding-governance-package",
+      "contentSha256": "bd186b7613a5df082d3f3adf8697a50b151f06329d70fb1ee3b81d194b5833b3"
+    },
+    {
+      "id": "cowork-evo/automationbench-5134-benefits-eligibility-governance-package",
+      "path": "tasks/cross_office/automationbench-5134-benefits-eligibility-governance-package",
+      "contentSha256": "d14c6d608e25728cf41f0fbea678fc57530548835f3312281755a94a34dcdb5b"
+    },
+    {
+      "id": "cowork-evo/automationbench-5135-termination-freeze-control-package",
+      "path": "tasks/cross_office/automationbench-5135-termination-freeze-control-package",
+      "contentSha256": "6fadf4a81237caec4baa7ccefc7f1da3194639d25cd51528602ad72759a9f74a"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-arxiv-literature-review-package",
+      "path": "tasks/cross_office/cowork-bench-arxiv-literature-review-package",
+      "contentSha256": "88eb2a2b5037a876631c46691681bbdc799e35262cf57b6c67b4a72cde2081ff"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-cafeteria-meal-planning-package",
+      "path": "tasks/cross_office/cowork-bench-cafeteria-meal-planning-package",
+      "contentSha256": "bd41ced2aa42cace996b54c76afb048407a084631416c77ea8c62b21825b1479"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-conference-program-committee-package",
+      "path": "tasks/cross_office/cowork-bench-conference-program-committee-package",
+      "contentSha256": "e446841a47bf6695e92b910a8a19051d1d692c1cb6f3554dc280ee7140da2247"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-course-enrollment-dashboard",
+      "path": "tasks/xlsx/cowork-bench-course-enrollment-dashboard",
+      "contentSha256": "a3eb30c074c775c9ffa4bee3a80f1e1e7254584164bacae0e0c395f3d3f22102"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-financial-audit-reconciliation-package",
+      "path": "tasks/cross_office/cowork-bench-financial-audit-reconciliation-package",
+      "contentSha256": "b11b7bbbbe02676830bda5346fb177d8e41b5d15d0cccb4faf1236b1bfdad750"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-financial-audit-workbook",
+      "path": "tasks/xlsx/cowork-bench-financial-audit-workbook",
+      "contentSha256": "1929e0c2065c757a218b4867b9179606a28fab62881098aea974cc8476c13fb9"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-fy2026-leadership-budget-review",
+      "path": "tasks/ppt/cowork-bench-fy2026-leadership-budget-review",
+      "contentSha256": "249633dec02ad0ed01e00d6ea9429517de3df8423c5f739040d8007f225e7cc3"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-insales-inventory-reorder-forecast",
+      "path": "tasks/xlsx/cowork-bench-insales-inventory-reorder-forecast",
+      "contentSha256": "ad00f0241cd9e8235a74fbeb6e4fa591ab14727505a81a6b883e5ce2c65d6181"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-moex-portfolio-analysis-package",
+      "path": "tasks/cross_office/cowork-bench-moex-portfolio-analysis-package",
+      "contentSha256": "85dde9487f2770cb24be5a3a45b92b247f82a0b5df0c88b4a07fd1972e223c70"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-moex-sector-rotation-dashboard",
+      "path": "tasks/xlsx/cowork-bench-moex-sector-rotation-dashboard",
+      "contentSha256": "2745468f4ed3c15b26e822e59718492379ba09bb5071ebb0cc484ceb30eace87"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-q4-executive-briefing-package",
+      "path": "tasks/ppt/cowork-bench-q4-executive-briefing-package",
+      "contentSha256": "4a2f46ab2f0e32a68fab68afd2127d73b4f2c7be35d69b394f9e8ec64e7a7984"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-refund-root-cause-package",
+      "path": "tasks/cross_office/cowork-bench-refund-root-cause-package",
+      "contentSha256": "2f93c57dbff3acb4a4a851d88ad5471401bf3fa21b4b83961ca4735bfc66b046"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-rzd-trip-plan-from-outline",
+      "path": "tasks/docx/cowork-bench-rzd-trip-plan-from-outline",
+      "contentSha256": "a7ef014c9249c8b64ceac5eec994848ce69903a599ad34dd06ce859e8b68fba4"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-scholarly-trend-analysis-package",
+      "path": "tasks/cross_office/cowork-bench-scholarly-trend-analysis-package",
+      "contentSha256": "a836c075f84eec3c3f68f1a7954cdf96dbd893b0c8a04e00351f38baff211f3f"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-sf-regional-sales-forecast",
+      "path": "tasks/xlsx/cowork-bench-sf-regional-sales-forecast",
+      "contentSha256": "3e82198296dd30dfa9756f767ef7735ddbd10fa7a2708cf89cb6a060eeff6acd"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-sf-sla-breach-audit",
+      "path": "tasks/xlsx/cowork-bench-sf-sla-breach-audit",
+      "contentSha256": "cc52064380324df09218353a3f3b2a6157b38040dc7a62125601c84988be6cb3"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-shipping-tax-update-propagation",
+      "path": "tasks/cross_office/cowork-bench-shipping-tax-update-propagation",
+      "contentSha256": "a171bf983e9b4b453d4e87f0f41eba1d228319d669814ac1e0748159925082d3"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-student-retention-workspace-package",
+      "path": "tasks/cross_office/cowork-bench-student-retention-workspace-package",
+      "contentSha256": "df20cc65ee6cfae85afb52019ec72d812c713d5394f74ab224f5414c5717adc1"
+    },
+    {
+      "id": "cowork-evo/cowork-bench-supplier-contract-workbook",
+      "path": "tasks/xlsx/cowork-bench-supplier-contract-workbook",
+      "contentSha256": "4c3663439e402484ec5af7e45fd7de41f67bd778c5e237adcc43f1a8da75e4bf"
+    },
+    {
+      "id": "cowork-evo/cowork-inventory-optimization",
+      "path": "tasks/xlsx/cowork-inventory-optimization",
+      "contentSha256": "4e0e89bfa03f006a26a44fb28099c066f4b1f90b18574b5f67546487f83144b7"
+    },
+    {
+      "id": "cowork-evo/forte-finance-018-receivables-payables-consolidation",
+      "path": "tasks/xlsx/forte-finance-018-receivables-payables-consolidation",
+      "contentSha256": "3050c233b0a3c9437ffe50365f6d3f39fefeda3760a9541208005758fb2f723e"
+    },
+    {
+      "id": "cowork-evo/forte-legal-020-power-of-attorney-risk-report",
+      "path": "tasks/docx/forte-legal-020-power-of-attorney-risk-report",
+      "contentSha256": "93d1d7ef5a057a1b5ef0beca4cf68acd715d0be11ec783aead5076166812e075"
+    },
+    {
+      "id": "cowork-evo/llm-docx-d3-plain-english-closing-conditions",
+      "path": "tasks/docx/llm-docx-d3-plain-english-closing-conditions",
+      "contentSha256": "c0e0322a431268db661904eefa3240aecbe72fffea4f04c58f3b00a482125862"
+    },
+    {
+      "id": "cowork-evo/llm-docx-f6-accept-all-redlines",
+      "path": "tasks/docx/llm-docx-f6-accept-all-redlines",
+      "contentSha256": "9c848536d99fab5c2716b2934ee97fe7bff9e72fd13dea47ed224dd75d81b4f3"
+    },
+    {
+      "id": "cowork-evo/llm-docx-s4-revise-memo-meeting-notes",
+      "path": "tasks/docx/llm-docx-s4-revise-memo-meeting-notes",
+      "contentSha256": "0bfdf3b43d89e80f95ae225fea2db46f729c4b665dc901e0833c2bc1fc8b34cf"
+    },
+    {
+      "id": "cowork-evo/officebench-1-10-highest-salary-duplicate",
+      "path": "tasks/xlsx/officebench-1-10-highest-salary-duplicate",
+      "contentSha256": "53a31cb5cde8b9902a370814849edecffb475cd42b4433913700cffb44e42b9b"
+    },
+    {
+      "id": "cowork-evo/officebench-1-10-lowest-budget-add-highest",
+      "path": "tasks/xlsx/officebench-1-10-lowest-budget-add-highest",
+      "contentSha256": "3a47bd1a4b776d07c05fe43e46bac66659b10a2f247a9eb9886377cf321d6463"
+    },
+    {
+      "id": "cowork-evo/officebench-1-12-class-roster-counts",
+      "path": "tasks/docx/officebench-1-12-class-roster-counts",
+      "contentSha256": "ff5cd995f35f322816a556148030970c6bdede28717df29130cdf4361fd843bc"
+    },
+    {
+      "id": "cowork-evo/officebench-1-12-final-pass-count",
+      "path": "tasks/docx/officebench-1-12-final-pass-count",
+      "contentSha256": "f2c45efc74aac88b1b27bfb85889e1014e68d372fef694a5d5f8b8c3435cefeb"
+    },
+    {
+      "id": "cowork-evo/officebench-1-12-xihozun-hw2",
+      "path": "tasks/docx/officebench-1-12-xihozun-hw2",
+      "contentSha256": "d233e1e2a264cbabf49258a9d56b782522c4a14652fe3c8e2ce3046a5c47bd63"
+    },
+    {
+      "id": "cowork-evo/officebench-1-13-cs-transfer-eligibility",
+      "path": "tasks/docx/officebench-1-13-cs-transfer-eligibility",
+      "contentSha256": "2160384380d191e5e840b2a2c3635730e6b32631e1920ef2467c3a23f2998d5a"
+    },
+    {
+      "id": "cowork-evo/officebench-1-13-cs161-prerequisites",
+      "path": "tasks/docx/officebench-1-13-cs161-prerequisites",
+      "contentSha256": "bdf4ef6f5675d08e918651b2eb82f678f8331f5e7f6a66920374e359292e99ed"
+    },
+    {
+      "id": "cowork-evo/officebench-1-14-score-column-swap",
+      "path": "tasks/xlsx/officebench-1-14-score-column-swap",
+      "contentSha256": "86465d2c4e077f54585742e07b588220d4ed894851d66b36b10ec7d82157d552"
+    },
+    {
+      "id": "cowork-evo/officebench-1-15-house-creak",
+      "path": "tasks/docx/officebench-1-15-house-creak",
+      "contentSha256": "635c7a49443cc0b539672e79097e02f8801ea7c5067c88d70e88e84369d92779"
+    },
+    {
+      "id": "cowork-evo/officebench-1-15-project-report-reference",
+      "path": "tasks/docx/officebench-1-15-project-report-reference",
+      "contentSha256": "9468499c9c9e673f1ca96d66d870273ad5005d2908d9606039fec9b540031fc2"
+    },
+    {
+      "id": "cowork-evo/officebench-1-15-syllabus-integrity",
+      "path": "tasks/docx/officebench-1-15-syllabus-integrity",
+      "contentSha256": "cd9a99574f44b989f4b24e0a0fe9b4e2ea1716f370d26bffbeee9bb58168821c"
+    },
+    {
+      "id": "cowork-evo/officebench-1-16-random-paragraph",
+      "path": "tasks/docx/officebench-1-16-random-paragraph",
+      "contentSha256": "18e8967106a8c22036e3781eb9a840dba67624ce282473952e801bf140f7b37b"
+    },
+    {
+      "id": "cowork-evo/officebench-1-16-test-sentence",
+      "path": "tasks/docx/officebench-1-16-test-sentence",
+      "contentSha256": "5f71af1a84f5576af43269b79c8049f190d320196fe72b165627d84a3c1b142e"
+    },
+    {
+      "id": "cowork-evo/officebench-1-19-agreement-terms",
+      "path": "tasks/docx/officebench-1-19-agreement-terms",
+      "contentSha256": "324071299a57c03c8faf9380852fcfa01a5889df4ad5511d9f8780847746d51e"
+    },
+    {
+      "id": "cowork-evo/officebench-1-19-paper-abstract",
+      "path": "tasks/docx/officebench-1-19-paper-abstract",
+      "contentSha256": "f0a8002929d1063abae40a304a02a906c92f7b62efa16f3b8a08ae308bbcfc36"
+    },
+    {
+      "id": "cowork-evo/officebench-1-19-paper-metadata",
+      "path": "tasks/docx/officebench-1-19-paper-metadata",
+      "contentSha256": "ad7a4d3c74d91a3f1d6c0bde32f6d24f542e6136176b3bc245dad48ce2d82428"
+    },
+    {
+      "id": "cowork-evo/officebench-1-3-rename-docx",
+      "path": "tasks/docx/officebench-1-3-rename-docx",
+      "contentSha256": "c334d978a1acada11ac4babae76104c2b0b976616a49ce0059aaf9407b329ade"
+    },
+    {
+      "id": "cowork-evo/officebench-1-5-budget-growth-forecast",
+      "path": "tasks/xlsx/officebench-1-5-budget-growth-forecast",
+      "contentSha256": "b622b9ff591355503dc40558b8026c09fe76c189a098e291af2f697996a9e177"
+    },
+    {
+      "id": "cowork-evo/officebench-1-6-attendance",
+      "path": "tasks/xlsx/officebench-1-6-attendance",
+      "contentSha256": "05cff38a79f5460100710777f8fc59a8b3038cda8579edb57749e2804b135e8a"
+    },
+    {
+      "id": "cowork-evo/officebench-1-9-score-average",
+      "path": "tasks/xlsx/officebench-1-9-score-average",
+      "contentSha256": "81e16f4bdbf46e09f8355b61f64b2b3aab01dbeba30759ecbdd6df64d1b80e24"
+    },
+    {
+      "id": "cowork-evo/officebench-1-9-total-salary",
+      "path": "tasks/xlsx/officebench-1-9-total-salary",
+      "contentSha256": "c33d6092391e81196b09c9488f7cb696fcafcd75e8e9ece4d78b0782b411f28b"
+    },
+    {
+      "id": "cowork-evo/officebench-1-9-total-shopping-weight",
+      "path": "tasks/xlsx/officebench-1-9-total-shopping-weight",
+      "contentSha256": "98bdbdeec48bb56d39f553c400f927d28845944d8ea50403d9248b149b57d445"
+    },
+    {
+      "id": "cowork-evo/officebench-2-18-highest-score-statement",
+      "path": "tasks/docx/officebench-2-18-highest-score-statement",
+      "contentSha256": "f7494e9e93204d220d6a765f1cc0ea91349c2b57b1495e4b73f0425fdb0bd518"
+    },
+    {
+      "id": "cowork-evo/officebench-2-18-homework-assignment",
+      "path": "tasks/docx/officebench-2-18-homework-assignment",
+      "contentSha256": "295964febd1112aa07fa1333fb6bcf86526c011efc7c7744df90cae1decd4b08"
+    },
+    {
+      "id": "cowork-evo/officebench-2-18-shopping-list",
+      "path": "tasks/docx/officebench-2-18-shopping-list",
+      "contentSha256": "1dabd201220cc33c59a115d6710061377b81b3db805fbb04ef0f103b000f8051"
+    },
+    {
+      "id": "cowork-evo/officebench-2-19-teaching-report",
+      "path": "tasks/docx/officebench-2-19-teaching-report",
+      "contentSha256": "7faa9b4cd0653e11ec18022c15172360f0c7f957e22081becfa028fbffa30491"
+    },
+    {
+      "id": "cowork-evo/officebench-2-2-concert-address",
+      "path": "tasks/docx/officebench-2-2-concert-address",
+      "contentSha256": "12d7a28a0214ed9f7ce4ce4563b70c50036f95bfa0f143d7f83ceb4452f74eb9"
+    },
+    {
+      "id": "cowork-evo/officebench-2-2-concert-contact",
+      "path": "tasks/docx/officebench-2-2-concert-contact",
+      "contentSha256": "929c17ba004fd72d718a9113390bd193ce057e2b0d5ec036580eafcb463615fb"
+    },
+    {
+      "id": "cowork-evo/officebench-2-20-all-cs161",
+      "path": "tasks/docx/officebench-2-20-all-cs161",
+      "contentSha256": "7d8a56911a8c48e599a4a3afbb8592384adef2518610311606708c83d23579fc"
+    },
+    {
+      "id": "cowork-evo/officebench-2-20-cs-major-list",
+      "path": "tasks/docx/officebench-2-20-cs-major-list",
+      "contentSha256": "0302d82ae3acd3de1a91ad25ed2e5aa631888c0eba54403aec244d2b7a56db87"
+    },
+    {
+      "id": "cowork-evo/officebench-2-20-final-perfect",
+      "path": "tasks/docx/officebench-2-20-final-perfect",
+      "contentSha256": "c2c6d4bcdef5dfa11ccacad5f98c7abcb31dd19a692fab39ade5698753d2addd"
+    },
+    {
+      "id": "cowork-evo/officebench-2-21-bill-courses",
+      "path": "tasks/docx/officebench-2-21-bill-courses",
+      "contentSha256": "ffab602c8a0ba42925697a194ff8b39e1df68b81e2089b76c7e84ddffe8fa677"
+    },
+    {
+      "id": "cowork-evo/officebench-2-22-house-index-report",
+      "path": "tasks/docx/officebench-2-22-house-index-report",
+      "contentSha256": "bfff8334bba3f2554b20b9a8f99c70fa62a0cb4fe4d900ff642baba80286c6c4"
+    },
+    {
+      "id": "cowork-evo/officebench-2-22-midterm-report",
+      "path": "tasks/docx/officebench-2-22-midterm-report",
+      "contentSha256": "f83710da823c0fa13ab48dc5ff81a7329dc8cba3be0f77b6400c918908573fa0"
+    },
+    {
+      "id": "cowork-evo/officebench-2-26-invitation-text",
+      "path": "tasks/docx/officebench-2-26-invitation-text",
+      "contentSha256": "e85f858218a701a2fac44e4963aaa872720cdd028ccd3443dc8f776875820747"
+    },
+    {
+      "id": "cowork-evo/officebench-2-26-market-analysis-text",
+      "path": "tasks/docx/officebench-2-26-market-analysis-text",
+      "contentSha256": "4ba409a6fcb245531b0cd1bfa8612838824df6a64df269f822f3ca133f0488e7"
+    },
+    {
+      "id": "cowork-evo/officebench-2-30-rename-student-id",
+      "path": "tasks/docx/officebench-2-30-rename-student-id",
+      "contentSha256": "6b7957b180dc066e74a12b812baf37d4c77732adbf6542d8b8c52e7b78df5af3"
+    },
+    {
+      "id": "cowork-evo/officebench-2-36-grade-report",
+      "path": "tasks/docx/officebench-2-36-grade-report",
+      "contentSha256": "61e5987ba7a39e4072a3612b7dc1683c414fcd906eb2035834050ae7cab491f7"
+    },
+    {
+      "id": "cowork-evo/officebench-2-37-event-frequency",
+      "path": "tasks/docx/officebench-2-37-event-frequency",
+      "contentSha256": "fb40268e77c62993d71830fcf1c57bb1493620a25cd5b0a077500c2bbe5cae86"
+    },
+    {
+      "id": "cowork-evo/officebench-2-39-all-emails",
+      "path": "tasks/docx/officebench-2-39-all-emails",
+      "contentSha256": "39a560ace5c1c6c07516027ece3e45a8479aac703d13666d298aecd83455c8c7"
+    },
+    {
+      "id": "cowork-evo/officebench-2-39-earliest-email",
+      "path": "tasks/docx/officebench-2-39-earliest-email",
+      "contentSha256": "6f2b6e8fb6beed995d92cc579defdf459c0f8fec579f45b5800900ad689aa77d"
+    },
+    {
+      "id": "cowork-evo/officebench-2-39-latest-email",
+      "path": "tasks/docx/officebench-2-39-latest-email",
+      "contentSha256": "3c18fb69dde6a13614de63d807b31725b61cfffa22604e7d8806f36b2d68d1c8"
+    },
+    {
+      "id": "cowork-evo/officebench-2-6-homework-ocr",
+      "path": "tasks/docx/officebench-2-6-homework-ocr",
+      "contentSha256": "97b265e571fc85db15b81484de47b02e534bbb894f2433a6801ba90afe9fca59"
+    },
+    {
+      "id": "cowork-evo/officebench-2-7-paper-summary",
+      "path": "tasks/docx/officebench-2-7-paper-summary",
+      "contentSha256": "0a9364d1a1486c30f1e5e8d0321ae21646d0aa8376b3e822ca5ba00cf475e3d0"
+    },
+    {
+      "id": "cowork-evo/officebench-3-19-20-fellowship-compliance-case-package",
+      "path": "tasks/cross_office/officebench-3-19-20-fellowship-compliance-case-package",
+      "contentSha256": "fc8800d507bf480ce7257754d2826abea9e652c95f6da6ca1cfa06d5599d6169"
+    },
+    {
+      "id": "cowork-evo/officebench-3-2-nvidia-financial-board-briefing",
+      "path": "tasks/ppt/officebench-3-2-nvidia-financial-board-briefing",
+      "contentSha256": "caa7565259ecf113de4c70bedbffae22592af3bcbec262e782f7acf30633219f"
+    },
+    {
+      "id": "cowork-evo/officebench-3-22-homework-folder",
+      "path": "tasks/docx/officebench-3-22-homework-folder",
+      "contentSha256": "34fecab39d3cef1771b016aa3e376d8c832d26c1d3b042fcfd010cdf9324c5e1"
+    },
+    {
+      "id": "cowork-evo/officebench-3-5-invoice-payment-trends-briefing",
+      "path": "tasks/ppt/officebench-3-5-invoice-payment-trends-briefing",
+      "contentSha256": "566c8936389c0576863686684f48c4c669f7276362f53232b7d20b431e85d5ae"
+    },
+    {
+      "id": "cowork-evo/officebench-3-56-class-homework",
+      "path": "tasks/docx/officebench-3-56-class-homework",
+      "contentSha256": "9417df17cc6a2e9228d6dfe5f9ae771e8e6146e6847b02e07634c9ce5eb5eab4"
+    },
+    {
+      "id": "cowork-evo/officebench-3-58-shopping-docx",
+      "path": "tasks/docx/officebench-3-58-shopping-docx",
+      "contentSha256": "68d752a7debdb7955ec69f60b71e8e768d69433072037a5586f8590352e1e919"
+    },
+    {
+      "id": "cowork-evo/officebench-3-6-team-training-coordination-package",
+      "path": "tasks/cross_office/officebench-3-6-team-training-coordination-package",
+      "contentSha256": "d33351f68120d74a09f92734ab173807accdf43dadd733c9eb5bc55623e04c7c"
+    },
+    {
+      "id": "cowork-evo/officebench-3-60-cs161-folder",
+      "path": "tasks/docx/officebench-3-60-cs161-folder",
+      "contentSha256": "89e320ca93c3f474fe38553fa8a45962656377486a17edbb294eb8bedde6e7c0"
+    },
+    {
+      "id": "cowork-evo/officebench-3-63-score-report-folder",
+      "path": "tasks/docx/officebench-3-63-score-report-folder",
+      "contentSha256": "2730d2c5bd79c37bb1bbd54772889c956e0d99a735e93117053e73a9fe3cb832"
+    },
+    {
+      "id": "cowork-evo/officebench-3-69-transcript-gpa-audit-package",
+      "path": "tasks/cross_office/officebench-3-69-transcript-gpa-audit-package",
+      "contentSha256": "d19253087c8a1957e1294fbeb5fa724b1d01b1a6503231d53c9f036299f430d0"
+    },
+    {
+      "id": "cowork-evo/officebench-3-77-house-price-prediction",
+      "path": "tasks/docx/officebench-3-77-house-price-prediction",
+      "contentSha256": "a42a299dd151c9cb8866e601bea995ff1cbd3ee5f742f7a1fad4470baefcf139"
+    },
+    {
+      "id": "cowork-evo/officebench-3-8-progress-count",
+      "path": "tasks/docx/officebench-3-8-progress-count",
+      "contentSha256": "f5e5264f5a94b6b20546e8b325f8053b273d9dec96d05424a855d308262fcb02"
+    },
+    {
+      "id": "cowork-evo/officebench-3-8-revenue-threshold-report-package",
+      "path": "tasks/cross_office/officebench-3-8-revenue-threshold-report-package",
+      "contentSha256": "002e6463ef5eb64cb1d6aa8ca73eb8b82b5c1093f6afa372efe4a2d00447e5f4"
+    },
+    {
+      "id": "cowork-evo/officebench-3-82-top-five",
+      "path": "tasks/docx/officebench-3-82-top-five",
+      "contentSha256": "ee03bef08e2b9bfcc4522801e68a1aee3c21e37f990ee9f52ccb975149823bb1"
+    },
+    {
+      "id": "cowork-evo/officebench-3-84-sleep-analysis",
+      "path": "tasks/docx/officebench-3-84-sleep-analysis",
+      "contentSha256": "9c5b029ca19e8aa45b9d73b42152d9953d879307aa2128657ab76a0907498ebd"
+    },
+    {
+      "id": "cowork-evo/officebench-3-91-calendar-conflict-audit-package",
+      "path": "tasks/cross_office/officebench-3-91-calendar-conflict-audit-package",
+      "contentSha256": "2af8c201818e2a77b52f8efa97e9ee9c76895c6147cc963378bd8aa516325c9a"
+    },
+    {
+      "id": "cowork-evo/officebench-3-91-calendar-conflicts",
+      "path": "tasks/docx/officebench-3-91-calendar-conflicts",
+      "contentSha256": "cf2797fd22d0dbf84413482900d5eb4d5414936d12bf319f23ea9c86a27bf278"
+    },
+    {
+      "id": "cowork-evo/officeval-003-meeting-content-table-ruling",
+      "path": "tasks/docx/officeval-003-meeting-content-table-ruling",
+      "contentSha256": "2d23ab965b5858c34099f4ab335c98d7f24349aeac4da8606ee3fe50e4cec9fc"
+    },
+    {
+      "id": "cowork-evo/officeval-006-pdf-to-editable-math-template",
+      "path": "tasks/docx/officeval-006-pdf-to-editable-math-template",
+      "contentSha256": "bf85ee8e1e23f4833f97b5cfc7aef5479e183c4c8252f3337846890f8c4a6ab9"
+    },
+    {
+      "id": "cowork-evo/officeval-010-editable-technical-roadmap-reconstruction",
+      "path": "tasks/docx/officeval-010-editable-technical-roadmap-reconstruction",
+      "contentSha256": "821b0227711176acb9880fb742d7d72eb8b6c1d6888557ec255e42d22974257b"
+    },
+    {
+      "id": "cowork-evo/officeval-018-report-formatting-fidelity",
+      "path": "tasks/docx/officeval-018-report-formatting-fidelity",
+      "contentSha256": "a189f41d703445a7b4883bb2874f4fd14d19ba3e1d9e0ae4442a556da40dc9e1"
+    },
+    {
+      "id": "cowork-evo/officeval-022-format-transfer-cover-directory",
+      "path": "tasks/docx/officeval-022-format-transfer-cover-directory",
+      "contentSha256": "5efe57924c822f6d5232b1c70b07e28f3d5af59d20369759e4715920f8ba123d"
+    },
+    {
+      "id": "cowork-evo/officeval-029-image-to-editable-training-form",
+      "path": "tasks/docx/officeval-029-image-to-editable-training-form",
+      "contentSha256": "ee59e36eab29e1e777035c43ca9df62ec820f49eba06f596ba6b5af8bd317509"
+    },
+    {
+      "id": "cowork-evo/officeval-033-retail-price-catalog-uplift",
+      "path": "tasks/docx/officeval-033-retail-price-catalog-uplift",
+      "contentSha256": "e8dc3209569d2475a15ddc96b71fa857dfa518a86b0fcf46565384023dcb5b6f"
+    },
+    {
+      "id": "cowork-evo/officeval-036-pdf-statement-to-word-table",
+      "path": "tasks/docx/officeval-036-pdf-statement-to-word-table",
+      "contentSha256": "586be4561832b0cfbf292554571f91e4e271fe5e2b6ece21ddca235d631f58c1"
+    },
+    {
+      "id": "cowork-evo/officeval-040-advanced-formatting-and-watermark",
+      "path": "tasks/docx/officeval-040-advanced-formatting-and-watermark",
+      "contentSha256": "4d357fe85a4e637051640791fe326a2032ae479a4fe3061072b0c51d55d1eeb9"
+    },
+    {
+      "id": "cowork-evo/officeval-041-note-driven-deck-audit",
+      "path": "tasks/ppt/officeval-041-note-driven-deck-audit",
+      "contentSha256": "b07e30ac164f28e93471ffede39490e879023f7cf540fdd13105bea760bc96d5"
+    },
+    {
+      "id": "cowork-evo/officeval-043-business-card-to-editable-bilingual-deck",
+      "path": "tasks/ppt/officeval-043-business-card-to-editable-bilingual-deck",
+      "contentSha256": "643bfcfd249f7ee1ae799d6dbf492d04003eb9b5709708655c13d627dbc635fe"
+    },
+    {
+      "id": "cowork-evo/officeval-046-image-to-editable-dual-research-diagrams",
+      "path": "tasks/ppt/officeval-046-image-to-editable-dual-research-diagrams",
+      "contentSha256": "5b8479e0366085884dcb199fc011194c57c3d1cb412a2baed0cbc89451b2dd63"
+    },
+    {
+      "id": "cowork-evo/officeval-051-image-to-editable-anomaly-detection-flow",
+      "path": "tasks/ppt/officeval-051-image-to-editable-anomaly-detection-flow",
+      "contentSha256": "f69578800fc98a7befba56fa5424f49db70a117c52f4dc5b7050190d07cf24ed"
+    },
+    {
+      "id": "cowork-evo/officeval-054-image-to-editable-water-reuse-process",
+      "path": "tasks/ppt/officeval-054-image-to-editable-water-reuse-process",
+      "contentSha256": "92c38051c46aff557f2160f2125f01ad3181c0c6a1ac034c16d843896a03d1d3"
+    },
+    {
+      "id": "cowork-evo/officeval-055-image-to-editable-outage-flow",
+      "path": "tasks/ppt/officeval-055-image-to-editable-outage-flow",
+      "contentSha256": "4709f0d415236fd71297d083fe951a2265467afc8e009c63ceef1262a38dc874"
+    },
+    {
+      "id": "cowork-evo/officeval-056-image-to-editable-complaint-closure-flow",
+      "path": "tasks/ppt/officeval-056-image-to-editable-complaint-closure-flow",
+      "contentSha256": "2d58b770f09bd5ae80a6fec828eb101511dc4989cb49b6ec160e9d8d67d7cd5d"
+    },
+    {
+      "id": "cowork-evo/officeval-059-ppt-link-in-word-application",
+      "path": "tasks/cross_office/officeval-059-ppt-link-in-word-application",
+      "contentSha256": "613bb3b164f22816f1c8e04e9fabbb3cc8ceedf8d2ad23cbd0152164356494d8"
+    },
+    {
+      "id": "cowork-evo/officeval-060-single-slide-image-layout-repair",
+      "path": "tasks/ppt/officeval-060-single-slide-image-layout-repair",
+      "contentSha256": "aa71eefbc905c72906bd71d35d7eba0eec5887b250bce4c459d2f4d7b2eb4842"
+    },
+    {
+      "id": "cowork-evo/officeval-063-multi-page-content-editing",
+      "path": "tasks/ppt/officeval-063-multi-page-content-editing",
+      "contentSha256": "db9c68fc20e566a9d2ec37721cc899e8d8c5c998d98ad9a4f6fba1a472a35a77"
+    },
+    {
+      "id": "cowork-evo/officeval-064-ordered-photo-layout-completion",
+      "path": "tasks/ppt/officeval-064-ordered-photo-layout-completion",
+      "contentSha256": "1a696c92a08249986d3938abcf6f2c03e4b3f0e8ae59dd5a6e3942d58059e723"
+    },
+    {
+      "id": "cowork-evo/officeval-066-excel-to-editable-data-deck",
+      "path": "tasks/ppt/officeval-066-excel-to-editable-data-deck",
+      "contentSha256": "2f9d39b82b7f04058f6c235955de88c9e5eac9fe39fc28d081ffaa5324690471"
+    },
+    {
+      "id": "cowork-evo/officeval-068-editable-deck-consolidation",
+      "path": "tasks/ppt/officeval-068-editable-deck-consolidation",
+      "contentSha256": "f98f545496c4cad2bfc5279db16f6dfbb158d5179379fdcc0bbfc10ad41fb0e2"
+    },
+    {
+      "id": "cowork-evo/officeval-069-reference-guided-visual-editing",
+      "path": "tasks/ppt/officeval-069-reference-guided-visual-editing",
+      "contentSha256": "d3cd28dd3a2aed6e2ceb53d162a2f5dc30408a265f454b7c50f1f052feb21bd9"
+    },
+    {
+      "id": "cowork-evo/officeval-070-single-slide-layout-polishing",
+      "path": "tasks/ppt/officeval-070-single-slide-layout-polishing",
+      "contentSha256": "e453b32bce582f1bbab85dbe795aef01d7db63fbd9387070650301c721216157"
+    },
+    {
+      "id": "cowork-evo/officeval-074-full-deck-localization",
+      "path": "tasks/ppt/officeval-074-full-deck-localization",
+      "contentSha256": "e7e0f6605874cfc8b80003f6d5ebabc6f7843979e753bfa65223b5c6569060e8"
+    },
+    {
+      "id": "cowork-evo/officeval-075-template-style-transfer",
+      "path": "tasks/ppt/officeval-075-template-style-transfer",
+      "contentSha256": "9c4532a318f3d022c85ec3a8355518b3c1f94a4abd2c8c70b3dc36ee449c8d66"
+    },
+    {
+      "id": "cowork-evo/officeval-076-outline-to-animated-sales-plan",
+      "path": "tasks/ppt/officeval-076-outline-to-animated-sales-plan",
+      "contentSha256": "6bbb7d9b1e8cd403aa21cf64f15e963d343d5b888a067022d56a34183622c9ef"
+    },
+    {
+      "id": "cowork-evo/officeval-078-excel-link-in-regional-deck",
+      "path": "tasks/cross_office/officeval-078-excel-link-in-regional-deck",
+      "contentSha256": "93ec4b7bed4e4793770092950cf421b7c9a5cb2ef1d5c069d379c78d3684b017"
+    },
+    {
+      "id": "cowork-evo/officeval-080-requirements-driven-deck-revision",
+      "path": "tasks/cross_office/officeval-080-requirements-driven-deck-revision",
+      "contentSha256": "b78b3da2024b369eec07c319442584bac263b643d7c1aab68e9dae63ee73ad49"
+    },
+    {
+      "id": "cowork-evo/officeval-088-product-docs-to-analysis-package",
+      "path": "tasks/cross_office/officeval-088-product-docs-to-analysis-package",
+      "contentSha256": "568cb259d554594d823f783ae69f263c97cda46c4aced0bdf283deeb362af054"
+    },
+    {
+      "id": "cowork-evo/officeval-088-product-table",
+      "path": "tasks/xlsx/officeval-088-product-table",
+      "contentSha256": "862095d518d535844259dded1ed2f61cfac133184c7b1392bedb32baf4deab15"
+    },
+    {
+      "id": "cowork-evo/officeval-093-editable-overlapping-pentagons",
+      "path": "tasks/xlsx/officeval-093-editable-overlapping-pentagons",
+      "contentSha256": "ee4b6ffe8b1dcdb0c4f020e43f690d39380a5c0fc3259f7566109349d1e167bb"
+    },
+    {
+      "id": "cowork-evo/pptarena-001-kazakh-to-english-preserve-french",
+      "path": "tasks/ppt/pptarena-001-kazakh-to-english-preserve-french",
+      "contentSha256": "6180173abcb68ffd2c57181f9f96cfe0c9f46747a8001455882806d6d3bd0b7d"
+    },
+    {
+      "id": "cowork-evo/pptarena-003-source-footer-edit",
+      "path": "tasks/ppt/pptarena-003-source-footer-edit",
+      "contentSha256": "1888e78f93e391b943d54cb19afb2219145ce1c5379cea4b628744ad114d3a33"
+    },
+    {
+      "id": "cowork-evo/pptarena-004-slide8-font-size-increase",
+      "path": "tasks/ppt/pptarena-004-slide8-font-size-increase",
+      "contentSha256": "463d5414be14907781c07fe873ef88842c70a2dccf45252ef0ad2d8e17b94abd"
+    },
+    {
+      "id": "cowork-evo/pptarena-014-bold-titles-except-cover",
+      "path": "tasks/ppt/pptarena-014-bold-titles-except-cover",
+      "contentSha256": "8c4be8f6994bdc9a0274da77d0bb732bf02b863edde154ea35023c9c26150765"
+    },
+    {
+      "id": "cowork-evo/pptarena-015-bold-all-slide-titles",
+      "path": "tasks/ppt/pptarena-015-bold-all-slide-titles",
+      "contentSha256": "29ba9877f624362b2ab0d0f4ead15cc8e7c4a54edf7262050d662f7a0b809bb0"
+    },
+    {
+      "id": "cowork-evo/pptarena-016-aligned-photo-triptych",
+      "path": "tasks/ppt/pptarena-016-aligned-photo-triptych",
+      "contentSha256": "1176964659d9a2db6b2c5e2dd7896edb043ee7ea57a0c8f5822e7eb0a69268b3"
+    },
+    {
+      "id": "cowork-evo/pptarena-021-title-case-titles",
+      "path": "tasks/ppt/pptarena-021-title-case-titles",
+      "contentSha256": "a490d83bc4c24a86bd06e2b11a3be050b1702276fa45d89613354684d25e34aa"
+    },
+    {
+      "id": "cowork-evo/pptarena-023-add-thank-you-slide",
+      "path": "tasks/ppt/pptarena-023-add-thank-you-slide",
+      "contentSha256": "c5f686a3d67e90165a8293a7e1af7be3a6492dc52873ca5945955746b757126d"
+    },
+    {
+      "id": "cowork-evo/pptarena-025-theme-banded-financial-table",
+      "path": "tasks/ppt/pptarena-025-theme-banded-financial-table",
+      "contentSha256": "8a64195d6a511e367d46357dbc7e93ec5a53bf4bdda96a34cee3d446960e77c7"
+    },
+    {
+      "id": "cowork-evo/pptarena-027-correct-image-placeholders",
+      "path": "tasks/ppt/pptarena-027-correct-image-placeholders",
+      "contentSha256": "ed48433bc512df44f503690f1b1bd3b98af6d7b349a9bafa682bfc9d1aaa5711"
+    },
+    {
+      "id": "cowork-evo/pptarena-028-logical-slide-order-and-agenda",
+      "path": "tasks/ppt/pptarena-028-logical-slide-order-and-agenda",
+      "contentSha256": "b832e94637510824f6fedee50e68efbe5d2bc293fb554e2f1443e8246e79c014"
+    },
+    {
+      "id": "cowork-evo/pptarena-029-column-to-pie-chart",
+      "path": "tasks/ppt/pptarena-029-column-to-pie-chart",
+      "contentSha256": "fff56f21684f47b7627a745e32ca226d168aa3d14101be24e55f6c0ee90c54f6"
+    },
+    {
+      "id": "cowork-evo/pptarena-030-text-data-to-line-chart",
+      "path": "tasks/ppt/pptarena-030-text-data-to-line-chart",
+      "contentSha256": "948eab65ef6bda49cd63a2ba63b95fd20dac592e05ce388d2e15c338c47954c7"
+    },
+    {
+      "id": "cowork-evo/pptarena-031-fix-text-overflow",
+      "path": "tasks/ppt/pptarena-031-fix-text-overflow",
+      "contentSha256": "28f445e231ea533f55d7fd56fa953820be6dd52b430ba678f5f74a1eaae2b1e8"
+    },
+    {
+      "id": "cowork-evo/pptarena-036-speaker-notes-and-slide-removal",
+      "path": "tasks/ppt/pptarena-036-speaker-notes-and-slide-removal",
+      "contentSha256": "5baeba2bda8b5e340df1085b4e367fe6a773089cfbac4f2c73ee47f141955a65"
+    },
+    {
+      "id": "cowork-evo/pptarena-037-fade-transitions-all-slides",
+      "path": "tasks/ppt/pptarena-037-fade-transitions-all-slides",
+      "contentSha256": "c76edc30b96b2a31fdff8c69543ca9da56a8fb88f685c3aab7b3a27cc2e69fb1"
+    },
+    {
+      "id": "cowork-evo/pptarena-041-picture-matched-gradient-background",
+      "path": "tasks/ppt/pptarena-041-picture-matched-gradient-background",
+      "contentSha256": "47c97e2431ca75b13157d064dd33121840c8bf2b97090f7972b49864f6150eab"
+    },
+    {
+      "id": "cowork-evo/pptarena-044-match-flags-to-region-descriptions",
+      "path": "tasks/ppt/pptarena-044-match-flags-to-region-descriptions",
+      "contentSha256": "553b991001337f00fe9608582219d3542128b6e514fd231d56cca9ebe61b37b9"
+    },
+    {
+      "id": "cowork-evo/pptarena-047-line-to-clustered-column-chart",
+      "path": "tasks/ppt/pptarena-047-line-to-clustered-column-chart",
+      "contentSha256": "b119acb60777a1752f9d0006fe9461cd6b617f36793f7758d24c48b1748c5935"
+    },
+    {
+      "id": "cowork-evo/pptarena-050-normalize-date-formats",
+      "path": "tasks/ppt/pptarena-050-normalize-date-formats",
+      "contentSha256": "fd6dc9e5d49f75210a8c3df4d90e5fef1c74ce52323c90c8c7120fa3740c8927"
+    },
+    {
+      "id": "cowork-evo/pptarena-053-text-data-to-editable-table",
+      "path": "tasks/ppt/pptarena-053-text-data-to-editable-table",
+      "contentSha256": "1a90c28ff6bdb35e6db82702ed79e366567a100693d023db51a2c880550b7457"
+    },
+    {
+      "id": "cowork-evo/pptarena-059-two-url-clickable-hyperlinks",
+      "path": "tasks/ppt/pptarena-059-two-url-clickable-hyperlinks",
+      "contentSha256": "9777cf3c65d6bb5219556ff8028297404c96d4b458fc1958aa2c7a35be8d3cca"
+    },
+    {
+      "id": "cowork-evo/pptarena-061-sort-table-by-score-descending",
+      "path": "tasks/ppt/pptarena-061-sort-table-by-score-descending",
+      "contentSha256": "3bd0f5880cb6132168813950d47de6d5c880117c6658be8170aee54640a051be"
+    },
+    {
+      "id": "cowork-evo/pptarena-064-okabe-ito-chart-palette",
+      "path": "tasks/ppt/pptarena-064-okabe-ito-chart-palette",
+      "contentSha256": "aee11e8624a8e8b43a343999370998ae2fa02c0ea7bacd3a713a34542a147767"
+    },
+    {
+      "id": "cowork-evo/pptarena-067-accessibility-reading-order-theme-font",
+      "path": "tasks/ppt/pptarena-067-accessibility-reading-order-theme-font",
+      "contentSha256": "50d757f39615c8d58626ccb5ad813c97dd7eba2115d9a5548c0cb4cd401be01b"
+    },
+    {
+      "id": "cowork-evo/pptarena-068-swimlane-flow-canonicalization",
+      "path": "tasks/ppt/pptarena-068-swimlane-flow-canonicalization",
+      "contentSha256": "59c609ced93b2dc8e007240038c63f05d0f635ecf6b6cd0363785af9cb94e68e"
+    },
+    {
+      "id": "cowork-evo/pptarena-071-negative-number-table-formatting",
+      "path": "tasks/ppt/pptarena-071-negative-number-table-formatting",
+      "contentSha256": "884657582aaff7d07c7bd314ee403369c4a9b19111fe38e4b5d076c5e421c346"
+    },
+    {
+      "id": "cowork-evo/pptarena-074-cross-slide-performance-consolidation",
+      "path": "tasks/ppt/pptarena-074-cross-slide-performance-consolidation",
+      "contentSha256": "6335ebbe9b84d92ac3ce8cf2db4ce832c7d8771a88e0e3f5e32c93945ed2328c"
+    },
+    {
+      "id": "cowork-evo/pptarena-082-thin-dark-gray-slide-borders",
+      "path": "tasks/ppt/pptarena-082-thin-dark-gray-slide-borders",
+      "contentSha256": "5f1495dab8c7913abcf691237a14208e2632f083785d6abfdff48a3804eb890b"
+    },
+    {
+      "id": "cowork-evo/pptarena-083-bibliography-from-footers",
+      "path": "tasks/ppt/pptarena-083-bibliography-from-footers",
+      "contentSha256": "d1ef28287d24b94417fe573663ac84044a383a3eafe454a67e271c973b4a6fb3"
+    },
+    {
+      "id": "cowork-evo/pptarena-093-climate-multi-edit-cascade",
+      "path": "tasks/ppt/pptarena-093-climate-multi-edit-cascade",
+      "contentSha256": "d2491923b5bfe6e36f57884dc6a8d257ca4998592fcff95b3bc1e99d9c339897"
+    },
+    {
+      "id": "cowork-evo/sb2-debugging-01-03-lbo-repair",
+      "path": "tasks/xlsx/sb2-debugging-01-03-lbo-repair",
+      "contentSha256": "4d64c8deffe8bef15ad525757a7b6f6def29ea6e8e36eb403d654bd4bc43499c"
+    },
+    {
+      "id": "cowork-evo/sb2-debugging-02-03-apc-merger-repair",
+      "path": "tasks/xlsx/sb2-debugging-02-03-apc-merger-repair",
+      "contentSha256": "ef032b15af8cbb5d7994e5832fb499171505523a3544c5136541a891fdb642e0"
+    },
+    {
+      "id": "cowork-evo/sb2-debugging-03-03-lbo-repair",
+      "path": "tasks/xlsx/sb2-debugging-03-03-lbo-repair",
+      "contentSha256": "8696ce9bbe26c3820cb3c3222ee6ecadf03339549971fa74e5670e0df886586b"
+    },
+    {
+      "id": "cowork-evo/sb2-debugging-04-03-model-structure-repair",
+      "path": "tasks/xlsx/sb2-debugging-04-03-model-structure-repair",
+      "contentSha256": "ae79382d1226a092eda56d5527467f47d36ff19881b50eff8b2c044974cea1cd"
+    },
+    {
+      "id": "cowork-evo/sb2-debugging-08-03-team-model-repair",
+      "path": "tasks/xlsx/sb2-debugging-08-03-team-model-repair",
+      "contentSha256": "4106b867b420d7f6b342f0aeec376bf30aba55b9a03754543c4c8a9a41150172"
+    },
+    {
+      "id": "cowork-evo/sb2-financial-model-02-03-working-capital-ratios",
+      "path": "tasks/xlsx/sb2-financial-model-02-03-working-capital-ratios",
+      "contentSha256": "334680a6808f62459d1a2c86afdb01900571142ecb97123db043db844e0cdd33"
+    },
+    {
+      "id": "cowork-evo/sb2-financial-model-03-02-bank-valuation",
+      "path": "tasks/xlsx/sb2-financial-model-03-02-bank-valuation",
+      "contentSha256": "8c5eae4f93210fc826d9844f87f9570e7377212c9becfb06f88d46080e11671e"
+    },
+    {
+      "id": "cowork-evo/sb2-financial-model-05-01-aif-fund",
+      "path": "tasks/xlsx/sb2-financial-model-05-01-aif-fund",
+      "contentSha256": "0d3e5b294d372071074e36e1863b877ef416d41708dc24c4e19ff7ac4b319b58"
+    },
+    {
+      "id": "cowork-evo/sb2-financial-model-07-02-real-estate",
+      "path": "tasks/xlsx/sb2-financial-model-07-02-real-estate",
+      "contentSha256": "0d8e1292aeb73b575fdfd7c4ecd7ab9ed0d580bc29212eb28b9d12682c318c29"
+    },
+    {
+      "id": "cowork-evo/sb2-financial-model-13-02-logistics",
+      "path": "tasks/xlsx/sb2-financial-model-13-02-logistics",
+      "contentSha256": "59e6d0067fe914d8253fa30fa877e0d10253a8d7af75bd64c512c78e1997a55d"
+    },
+    {
+      "id": "cowork-evo/sb2-financial-model-16-02-ma-valuation",
+      "path": "tasks/xlsx/sb2-financial-model-16-02-ma-valuation",
+      "contentSha256": "0a157cd9df665e43c28c4b18bd953433c17d68b5bcd4a08b184f2e490dd14968"
+    },
+    {
+      "id": "cowork-evo/sb2-financial-model-18-03-project-ratios",
+      "path": "tasks/xlsx/sb2-financial-model-18-03-project-ratios",
+      "contentSha256": "d7f9b7983fef5ab9927688adcc5399e73c97801565380eae94dee66c1eab42e3"
+    },
+    {
+      "id": "cowork-evo/sb2-financial-model-20-03-operations-rollforward",
+      "path": "tasks/xlsx/sb2-financial-model-20-03-operations-rollforward",
+      "contentSha256": "89962ec63658626dd75f41a56f37dde6341d67177f0a3fea0045fc61fd576c5f"
+    },
+    {
+      "id": "cowork-evo/sb2-template-06-19-revenue-cagr",
+      "path": "tasks/xlsx/sb2-template-06-19-revenue-cagr",
+      "contentSha256": "b42dcfe8fe3d79f3e086ed4c1e868fbbab8c74434733f3efa9ef6c021f5ff4fc"
+    },
+    {
+      "id": "cowork-evo/sb2-template-14-09-concession-revenue",
+      "path": "tasks/xlsx/sb2-template-14-09-concession-revenue",
+      "contentSha256": "5d371f4486937a0cd523fad364242f14d6c60d8352300306f3ad63714db569f3"
+    },
+    {
+      "id": "cowork-evo/sb2-visualization-129-mars-valuation",
+      "path": "tasks/xlsx/sb2-visualization-129-mars-valuation",
+      "contentSha256": "28add1494ae59155cb2afc39293faae1dd5c7f06e645b334d46f2bca551d330d"
+    },
+    {
+      "id": "cowork-evo/sb2-visualization-1437004-activity-dashboard",
+      "path": "tasks/xlsx/sb2-visualization-1437004-activity-dashboard",
+      "contentSha256": "c233feb40a237dc1f40e6934e075bf59a4319a8bcf1b5ca454907dcd675aaf7a"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-archer-top4",
+      "path": "tasks/xlsx/spreadsheet-rl-archer-top4",
+      "contentSha256": "1862fa06b47b63241454cd7068b2f6b52cfa024bfddc6d27045c3159c8f65299"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-clean-email-body",
+      "path": "tasks/xlsx/spreadsheet-rl-clean-email-body",
+      "contentSha256": "6c2c22951699e6e316d68beb396d3d5a14416574b4d5c283885a841b53a0874c"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-cross-midnight-hours",
+      "path": "tasks/xlsx/spreadsheet-rl-cross-midnight-hours",
+      "contentSha256": "1d97d25df413d6d11aa46846a3a7ea37676c4927a94a7a717eeb68355ada876d"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-department-hours-chart",
+      "path": "tasks/xlsx/spreadsheet-rl-department-hours-chart",
+      "contentSha256": "37be918dc1f27a429d2468a3da12a453c3c4f91b0cc61d2e9b9ee6da8cd7bd4a"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-dependent-dropdown",
+      "path": "tasks/xlsx/spreadsheet-rl-dependent-dropdown",
+      "contentSha256": "dda3c5eb7bd0bdf2fdbe098cfb9d539430d38f10a6b29ef785727ceb617aeb8a"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-inventory-eom",
+      "path": "tasks/xlsx/spreadsheet-rl-inventory-eom",
+      "contentSha256": "d881355fbe29f0da0116baedb2cf245782ca695b3b2c92ec7ffa3b11089f9974"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-loan-fifo",
+      "path": "tasks/xlsx/spreadsheet-rl-loan-fifo",
+      "contentSha256": "5cd05962020d0158ff1b0db63ce740e724acaafcbc5104e5d67c2fa1a8984528"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-powerquery-reshape",
+      "path": "tasks/xlsx/spreadsheet-rl-powerquery-reshape",
+      "contentSha256": "6dfbc04ea2a3e2171e2c96fea4e141a9df4e4d9c850637e9bc5324fd09aa9744"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-product-full-outer-join",
+      "path": "tasks/xlsx/spreadsheet-rl-product-full-outer-join",
+      "contentSha256": "ff13d8b24f22d0c888be2e4fdfafdbd25d39bba9dc0a2e864f9cd96302dd9485"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-salary-forecast",
+      "path": "tasks/xlsx/spreadsheet-rl-salary-forecast",
+      "contentSha256": "f9ebd894663d24cd556aa9b5a0177fe519be2cd3b1a0341415bcf91f74e52894"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-square-quickbooks-master",
+      "path": "tasks/xlsx/spreadsheet-rl-square-quickbooks-master",
+      "contentSha256": "4a2f3ee711cd59667f34a07d131f9f540f44349aed5230e76a9688c51ea4ecdc"
+    },
+    {
+      "id": "cowork-evo/spreadsheet-rl-ups-power",
+      "path": "tasks/xlsx/spreadsheet-rl-ups-power",
+      "contentSha256": "7e883bcefc786a328c8d39b1c5972bed4631b96229ce0153b96a1f91fcae0a57"
+    },
+    {
+      "id": "cowork-evo/spreadsheetbench2-09-01-lbo-formula-repair",
+      "path": "tasks/xlsx/spreadsheetbench2-09-01-lbo-formula-repair",
+      "contentSha256": "88113bce1b924ebca19c10de96938881a752f13b22ed2a82ffbc66fb041c3896"
+    },
+    {
+      "id": "cowork-evo/spreadsheetbench2-12-01-financial-model-completion",
+      "path": "tasks/xlsx/spreadsheetbench2-12-01-financial-model-completion",
+      "contentSha256": "e1bf4744725a236918f05435c6b76522fb88bb4b5dcbdd0159762facbb3dec45"
+    },
+    {
+      "id": "cowork-evo/theagentcompany-customer-meeting-openhands-capability-deck",
+      "path": "tasks/ppt/theagentcompany-customer-meeting-openhands-capability-deck",
+      "contentSha256": "9b3afec8921d47da4c2de37ad34998d257495aa57936b3c304ac5019c09a1ab4"
+    },
+    {
+      "id": "cowork-evo/theagentcompany-gitlab-engineering-progress-deck",
+      "path": "tasks/ppt/theagentcompany-gitlab-engineering-progress-deck",
+      "contentSha256": "fc570aaf4f7c2cf8a90fbe020816634a4322cf5fd9a92c2c8d4732d1728d4abc"
+    },
+    {
+      "id": "cowork-evo/theagentcompany-hr-internal-tooling-onboarding-deck",
+      "path": "tasks/ppt/theagentcompany-hr-internal-tooling-onboarding-deck",
+      "contentSha256": "70e0053e943f10b4696d87d7788e7c160d6c21d33a0368090f81d26bc73eb7ef"
+    },
+    {
+      "id": "cowork-evo/theagentcompany-stock-analysis-board-deck",
+      "path": "tasks/ppt/theagentcompany-stock-analysis-board-deck",
+      "contentSha256": "fef55444c501386e3a67de30ea85c4e99d4a1683033f8dbdd6c72032bbbc5033"
+    },
+    {
+      "id": "cowork-evo/workspace-bank-ledger",
+      "path": "tasks/xlsx/workspace-bank-ledger",
+      "contentSha256": "7162cc37dadb48ff1e8ae82a017c91629b0ba971c28b0556262bc75f6e05492f"
+    },
+    {
+      "id": "cowork-evo/workspace-event-plan",
+      "path": "tasks/xlsx/workspace-event-plan",
+      "contentSha256": "193447c43f49e3058cfbe1aa8d693b3c1f968f723a9c8ed17eacf75cf4a55a59"
+    },
+    {
+      "id": "cowork-evo/workspace-fashion-ops",
+      "path": "tasks/xlsx/workspace-fashion-ops",
+      "contentSha256": "35e3ca12838fc6ba6f416630e6462ae039d7fd061e92b884df3536965f8753d1"
+    },
+    {
+      "id": "cowork-evo/workspace-strategy-long-horizon",
+      "path": "tasks/xlsx/workspace-strategy-long-horizon",
+      "contentSha256": "38886b9bd8081576cbd3e04959eaab62a021d3c11ec68d38a3d8010b0afa869b"
+    }
+  ]
+}
