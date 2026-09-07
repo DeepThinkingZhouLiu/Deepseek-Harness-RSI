@@ -244,7 +244,7 @@ function forceTrustedRequestFields(
       ...body,
       model: trustedModel,
       stream: true,
-      // Claude Code 2.1.259 在 Sonnet/Opus 4.6+ 上使用 adaptive thinking。
+      // Claude Code 2.1.263 在 Sonnet/Opus 4.6+ 上使用 adaptive thinking。
       // 该字段与 effort 是两个独立控制面，不能信任沙箱请求传入的值。
       thinking: { type: 'adaptive' },
       output_config: {

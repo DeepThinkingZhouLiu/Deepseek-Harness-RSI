@@ -115,12 +115,27 @@ test('Claude Code Updater 与 Solver 可以绑定不同 Provider', async () => {
   assert.equal(bundle.target.id, 'msa-minimal')
   assert.equal(bundle.updater.protocol, 'claude-code-exec-v1')
   assert.equal(bundle.updater.runtime.package, '@anthropic-ai/claude-code')
-  assert.equal(bundle.updater.runtime.version, '2.1.259')
+  assert.equal(bundle.updater.runtime.version, '2.1.263')
   assert.equal(bundle.providers.solver.id, 'zcloud-openai')
   assert.equal(bundle.providers.solver.protocol, 'openai-chat-completions')
   assert.equal(bundle.providers.updater.id, 'zcloud-anthropic')
   assert.equal(bundle.providers.updater.protocol, 'anthropic-messages')
   assert.equal(bundle.experiment.models.updater.model, 'claude-sonnet-4-6')
+})
+
+test('Cowork-Bench GRHS 可将 Claude Sonnet 5 独立配置为 Updater', async () => {
+  const bundle = await loadExperimentBundle(
+    resolve(repositoryRoot, 'experiments/cowork-bench-grhs-mvp-claude-single.json'),
+    repositoryRoot,
+  )
+  assert.equal(bundle.target.id, 'msa-minimal-cowork-rsi')
+  assert.equal(bundle.environment.id, 'cowork-bench')
+  assert.equal(bundle.strategy.id, 'group-relative-harness')
+  assert.equal(bundle.updater.id, 'claude-code-cli')
+  assert.equal(bundle.providers.solver.id, 'zcloud-openai')
+  assert.equal(bundle.providers.updater.id, 'zcloud-anthropic')
+  assert.equal(bundle.experiment.models.solver.model, 'gpt-5.6-terra')
+  assert.equal(bundle.experiment.models.updater.model, 'claude-sonnet-5')
 })
 
 test('Experiment 拒绝 provider/providers 同时声明与 Updater Provider 协议错配', async () => {
