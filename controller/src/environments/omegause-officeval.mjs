@@ -653,6 +653,7 @@ export class OmegaUseOfficeValEnvironment {
     const context = { candidateId, partition, instanceId: layout.instanceId, seed }
     const solver = await runTrialStage({
       trialRoot, context, stage: 'solver',
+      maximumAttempts: this.environment.task.maximumSolverAttempts,
       prepareRetry: async (attempt) => {
         // 重试从冻结输入重新开始，失败工作区和轨迹完整归档。
         const archive = join(trialRoot, `solver-attempt-${attempt}`)
@@ -780,6 +781,7 @@ export class OmegaUseOfficeValEnvironment {
           solver: {
             id: this.solverDriver.id,
             cacheKey: this.solverDriver.cacheKey ?? null,
+            maximumAttempts: this.environment.task.maximumSolverAttempts ?? 3,
           },
           candidate: { id: candidateId, digest: candidateDigest },
           partition,

@@ -4,7 +4,8 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 import { ProtocolError } from './protocol.mjs'
 
-const MAXIMUM_ATTEMPTS = 3
+const DEFAULT_ATTEMPTS = 3
+const MAXIMUM_ATTEMPTS = 5
 const MAXIMUM_DIAGNOSTIC_CHARS = 32768
 
 function safeText(value) {
@@ -68,7 +69,7 @@ export function trialProgress(context, event, fields = {}) {
 
 export async function runTrialStage({
   trialRoot, context, stage, operation, prepareRetry = async () => {},
-  maximumAttempts = MAXIMUM_ATTEMPTS, retryDelayMs = 1000,
+  maximumAttempts = DEFAULT_ATTEMPTS, retryDelayMs = 1000,
 }) {
   if (!Number.isInteger(maximumAttempts) || maximumAttempts < 1 || maximumAttempts > MAXIMUM_ATTEMPTS
       || !Number.isFinite(retryDelayMs) || retryDelayMs < 0) {

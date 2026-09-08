@@ -16,6 +16,7 @@ spec:
     workspacePath: /workspace
     environmentAssets: environments/omegause-officeval-assets
     maximumConcurrentTrials: 2
+    maximumSolverAttempts: 5
     workspaceLimits:
       maximumFiles: 10000
       maximumBytes: 1073741824

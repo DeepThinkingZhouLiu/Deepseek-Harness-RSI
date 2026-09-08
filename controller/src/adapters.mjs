@@ -847,7 +847,7 @@ function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
   )
   rejectUnknownConfiguration(
     task,
-    new Set(['workspacePath', 'environmentAssets', 'maximumConcurrentTrials', 'workspaceLimits']),
+    new Set(['workspacePath', 'environmentAssets', 'maximumConcurrentTrials', 'maximumSolverAttempts', 'workspaceLimits']),
     'EnvironmentAdapter.spec.task',
   )
   rejectUnknownConfiguration(
@@ -1027,6 +1027,11 @@ function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
         task.maximumConcurrentTrials ?? 1,
         'EnvironmentAdapter.spec.task.maximumConcurrentTrials',
         { integer: true, min: 1, max: 8 },
+      ),
+      maximumSolverAttempts: expectNumber(
+        task.maximumSolverAttempts ?? 3,
+        'EnvironmentAdapter.spec.task.maximumSolverAttempts',
+        { integer: true, min: 1, max: 5 },
       ),
       workspaceLimits: resolvedWorkspaceLimits,
     },

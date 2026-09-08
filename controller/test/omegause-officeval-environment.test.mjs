@@ -111,7 +111,7 @@ test('OmegaUse 连续分数按 Dim1 门槛归一化到 [0,1]', () => {
   )
 })
 
-test('OmegaUse Solver 重试恢复冻结输入，Verifier 重试复用交付物，不重复求解或改分', async () => {
+test('OmegaUse Solver 使用配置的五次尝试并恢复冻结输入，Verifier 重试复用交付物', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rsi-officeval-stage-retry-'))
   const input = join(root, 'input.docx')
   await writeFile(input, 'frozen-input')
@@ -120,7 +120,7 @@ test('OmegaUse Solver 重试恢复冻结输入，Verifier 重试复用交付物�
   const environment = new OmegaUseOfficeValEnvironment({
     runRoot: root, repositoryRoot,
     environment: {
-      task: { workspacePath: '/workspace', workspaceLimits: {
+      task: { workspacePath: '/workspace', maximumSolverAttempts: 5, workspaceLimits: {
         maximumFiles: 10, maximumBytes: 1024, maximumFileBytes: 1024,
         maximumChangedFiles: 10, maximumChangedBytes: 1024,
       } },
@@ -131,7 +131,7 @@ test('OmegaUse Solver 重试恢复冻结输入，Verifier 重试复用交付物�
       solverCalls += 1
       await mkdir(sessionRoot)
       assert.equal(await readFile(join(taskWorkspace, 'input.docx'), 'utf8'), 'frozen-input')
-      if (solverCalls === 1) {
+      if (solverCalls < 5) {
         await writeFile(join(taskWorkspace, 'input.docx'), 'partial-edit')
         await writeFile(join(taskWorkspace, 'partial.docx'), 'partial')
         await writeFile(join(sessionRoot, 'agent.jsonl'), 'partial-trace')
@@ -160,12 +160,14 @@ test('OmegaUse Solver 重试恢复冻结输入，Verifier 重试复用交付物�
     layout: { instanceId: 'officeval_001', task: { instruction: 'fixture' },
       inputs: [{ name: 'input.docx', source: input, record: { bytes: 12, sha256: digest('frozen-input') } }] },
   })
-  assert.equal(solverCalls, 2)
+  assert.equal(solverCalls, 5)
   assert.equal(verifierCalls, 2)
   assert.equal(result.reward, 0)
   assert.equal(await readFile(join(result.trialRoot, 'solver-attempt-1/workspace/input.docx'), 'utf8'), 'partial-edit')
   assert.equal(await readFile(join(result.trialRoot, 'solver-attempt-1/solver-session/agent.jsonl'), 'utf8'), 'partial-trace')
-  assert.deepEqual((await readdir(join(result.trialRoot, 'diagnostics'))).sort(), ['solver-1.json', 'verifier-1.json'])
+  assert.deepEqual((await readdir(join(result.trialRoot, 'diagnostics'))).sort(), [
+    'solver-1.json', 'solver-2.json', 'solver-3.json', 'solver-4.json', 'verifier-1.json',
+  ])
 })
 
 test('OmegaUse 按题提交断点，恢复时保留 0 分结果并只补跑未完成题', async () => {

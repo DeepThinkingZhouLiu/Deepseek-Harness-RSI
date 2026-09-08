@@ -153,7 +153,8 @@ Task + 全部 Seed”为一个题目断点，评分完成后原子写入 `commit
 复用已提交结果（包括 0 分），只补跑未完成题。半成品目录会归档到
 `recovery/trial-attempts/`。
 
-单题 Solver 或 Verifier 的瞬时错误最多尝试 3 次（含首次），错误立即写入该 Trial 的
+单题 Solver 的瞬时错误由 Environment 的 `task.maximumSolverAttempts` 配置总尝试次数
+（含首次，允许 1–5，默认 3）；正式 Cowork-Bench 配置为 5，Verifier 仍最多尝试 3 次。错误立即写入该 Trial 的
 `diagnostics/<stage>-<attempt>.json`，包含脱敏后的 stderr、退出码、超时标记和重试决策。
 Solver 重试先归档失败工作区与轨迹，再从冻结输入开始；Verifier 重试直接复用已生成的
 Submission。合法的 0 分和部分分不重试，配置、依赖与协议错误直接失败。重试耗尽后停止
@@ -162,7 +163,7 @@ Submission。合法的 0 分和部分分不重试，配置、依赖与协议错�
 
 Cowork-Bench Judge 的模块搜索路径只包含受信的只读 `tests` 目录；Solver 和 Judge 的
 LibreOffice 用户配置写入容器私有 `/tmp/libreoffice-profile`。Chat Gateway 删除请求中的
-`n`，使用默认单条响应，避免部分兼容上游在显式 `n=1` 时只返回 reasoning 而没有正文。
+`n`，使用默认单条响应，不透传 Candidate 的多候选设置。
 
 ## Reward 与晋升
 

@@ -68,3 +68,35 @@ test('Trial 重试耗尽后抛错，不伪造 0 分；永久错误只运行一�
   assert.equal(retryableTrialError({ processResult: { timedOut: true } }), true)
   assert.equal(retryableTrialError(new ProtocolError('无效的 Trace')), false)
 })
+
+test('Trial 可明确配置五次尝试，第五次仍失败则停止并保留全部记录', async () => {
+  for (const succeeds of [true, false]) {
+    const root = await mkdtemp(join(tmpdir(), 'rsi-trial-five-attempts-'))
+    let calls = 0
+    const run = runTrialStage({
+      trialRoot: root, context, stage: 'solver', maximumAttempts: 5, retryDelayMs: 0,
+      operation: async (attempt) => {
+        calls += 1
+        if (succeeds && attempt === 5) return 'done'
+        throw new ProtocolError('model gateway returned no final content after 3 attempt(s) (finish_reason=stop)')
+      },
+    })
+    if (succeeds) assert.equal(await run, 'done')
+    else await assert.rejects(run, /Trial solver 失败/u)
+    assert.equal(calls, 5)
+    const files = await readdir(join(root, 'diagnostics'))
+    assert.equal(files.length, succeeds ? 4 : 5)
+    for (let attempt = 1; attempt <= files.length; attempt += 1) {
+      const record = JSON.parse(await readFile(join(root, `diagnostics/solver-${attempt}.json`), 'utf8'))
+      assert.equal(record.willRetry, attempt < 5)
+    }
+  }
+})
+
+test('Trial 拒绝非法尝试次数，不开始执行', async () => {
+  for (const maximumAttempts of [0, 6, 1.5, '5']) {
+    await assert.rejects(runTrialStage({
+      maximumAttempts, operation: () => assert.fail('非法配置不得执行'),
+    }), /重试参数无效/u)
+  }
+})

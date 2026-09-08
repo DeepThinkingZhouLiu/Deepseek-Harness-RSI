@@ -256,6 +256,21 @@ test('Environment Adapter 将上游模型额外重试限制在 0..5 次', async 
   assert.throws(() => validateEnvironmentAdapter(config), /maximumUpstreamRetries/u)
 })
 
+test('Office 单题 Solver 默认尝试三次，正式 Cowork 配置使用五次并拒绝越界配置', async () => {
+  const config = await readConfigFile(resolve(repositoryRoot, 'environments/omegause-officeval.yml'))
+  assert.equal(validateEnvironmentAdapter(config).task.maximumSolverAttempts, 3)
+  for (const maximum of [1, 5]) {
+    config.spec.task.maximumSolverAttempts = maximum
+    assert.equal(validateEnvironmentAdapter(config).task.maximumSolverAttempts, maximum)
+  }
+  for (const invalid of [0, 6, 1.5, '5']) {
+    config.spec.task.maximumSolverAttempts = invalid
+    assert.throws(() => validateEnvironmentAdapter(config), /maximumSolverAttempts/u)
+  }
+  const formal = await readConfigFile(resolve(repositoryRoot, 'environments/cowork-bench-full.yml'))
+  assert.equal(validateEnvironmentAdapter(formal).task.maximumSolverAttempts, 5)
+})
+
 test('Environment Adapter 拒绝与可信评分挂载冲突的工作区', async () => {
   const config = await readConfigFile(resolve(repositoryRoot, 'environments/omegause-officeval.yml'))
   config.spec.task.workspacePath = '/logs/submission'
