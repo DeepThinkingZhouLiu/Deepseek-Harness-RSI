@@ -320,6 +320,7 @@ export class AgentBayDockerClient {
     if (network === 'host') throw new ProtocolError('安全策略禁止 Docker host 网络')
     const containerName = safeDockerName(name)
     const staged = []
+    const retained = new Set()
     try {
       if (runAsCurrentUser && this.identity === null) this.identity = await this.bridge.request('identity')
       for (const mount of mounts) {
@@ -360,14 +361,22 @@ export class AgentBayDockerClient {
       try {
         result = await this.docker(args, { timeoutMs, secretEnvironment: secrets, operation: 'run' })
       } finally {
+        const transferErrors = []
         for (const mount of staged.filter((value) => !value.readOnly)) {
-          await this.bridge.request('downloadDir', { remotePath: mount.remotePath, localPath: mount.source })
+          try {
+            await this.bridge.request('downloadDir', { remotePath: mount.remotePath, localPath: mount.source })
+          } catch (error) {
+            retained.add(mount.remotePath)
+            transferErrors.push(`${error.message}; remote=${mount.remotePath}; local=${mount.source}`)
+          }
         }
         await this.removeContainer(containerName).catch(() => {})
+        if (transferErrors.length) throw new ProtocolError('AgentBay output transfer failed; remote results retained', transferErrors)
       }
       return result
     } finally {
-      await Promise.all(staged.map((mount) => this.bridge.request('removePath', { remotePath: mount.remotePath }).catch(() => {})))
+      await Promise.all(staged.filter(mount => !retained.has(mount.remotePath))
+        .map((mount) => this.bridge.request('removePath', { remotePath: mount.remotePath }).catch(() => {})))
     }
   }
 }

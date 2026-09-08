@@ -52,6 +52,9 @@ def main() -> None:
     ]
     if declares_option(judge_path, "--reward-file"):
         command.extend(["--reward-file", str(reward_file)])
+    for option in ("--data-dir", "--input-dir"):
+        if declares_option(judge_path, option):
+            command.extend([option, str(judge_path.parent.parent / "data" / "input_files")])
     process = subprocess.run(
         command,
         capture_output=True, text=True, timeout=1200, check=False,
@@ -65,6 +68,14 @@ def main() -> None:
     result = json.loads(judge_result.read_text(encoding="utf-8"))
     if not isinstance(result, dict):
         raise RuntimeError("Cowork Judge 返回值不是对象")
+    if "reward" not in result and "score" in result:
+        result["reward"] = result["score"]
+    if "criterion_results" not in result and "criteria" in result:
+        result["criterion_results"] = [
+            {"criterion_id": item["id"], "score": item["score"],
+             "evidence": item.get("evidence", ""), "raw": item}
+            for item in result["criteria"]
+        ]
     reward = result.get("reward")
     if isinstance(reward, bool) or not isinstance(reward, (int, float)) or not 0 <= float(reward) <= 1:
         raise RuntimeError("Cowork Judge reward 必须位于 [0,1]")

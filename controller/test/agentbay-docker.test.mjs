@@ -45,6 +45,23 @@ test('One bridge handles concurrent runs, transfers writable output and supplies
     assert.equal(build.timeoutSeconds, 14400)
     assert.ok(build.args.includes('DEBIAN_MIRROR=https://mirrors.tencent.com/debian'))
     assert.ok(build.args.includes('PYPI_INDEX_URL=https://mirrors.tencent.com/pypi/simple/'))
+    calls.length = 0
+    const request = client.bridge.request.bind(client.bridge)
+    client.bridge.request = async (operation, payload) => {
+      if (operation === 'downloadDir' && payload.localPath === '/output/failed') {
+        calls.push({ operation, ...payload })
+        throw new Error('SSL EOF')
+      }
+      return await request(operation, payload)
+    }
+    await assert.rejects(client.run({ image: 'solver', name: 'failed-transfer', mounts: [
+      { source: '/output/failed', target: '/workspace', readOnly: false },
+      { source: '/output/trace', target: '/trace', readOnly: false },
+    ] }), /remote results retained/u)
+    const failedPath = calls.find(call => call.operation === 'downloadDir' && call.localPath === '/output/failed').remotePath
+    assert.ok(!calls.some(call => call.operation === 'removePath' && call.remotePath === failedPath))
+    assert.ok(calls.some(call => call.operation === 'downloadDir' && call.localPath === '/output/trace'))
+    assert.ok(calls.some(call => call.args?.includes('failed-transfer') && call.args[0] === 'rm'))
   } finally {
     names.forEach((name, index) => {
       if (saved[index] === undefined) delete process.env[name]

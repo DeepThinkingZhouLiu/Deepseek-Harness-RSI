@@ -17,6 +17,12 @@ The existing OfficeVal dataset/evaluator and model-provider variables still appl
 Optional HARNESS_RSI_AGENTBAY_EXISTING_SESSION_ID attaches a warm VM.
 The bridge does not delete an attached session. Owned sessions are deleted
 when the bridge exits normally; the configured lifecycle policy handles expiry.
+File uploads/downloads retry independently up to four times. If a download still
+fails, the error identifies the retained session, archive and destination. Other
+outputs are downloaded where possible, and the bridge preserves that session
+and failed output directory for recovery instead of deleting completed work.
+Release a retained owned session after recovering its results; lifecycle expiry
+remains the fallback.
 
 The backend configures the registry mirror even on warm Docker daemons,
 reuses matching images, allows four hours for builds, and passes Tencent

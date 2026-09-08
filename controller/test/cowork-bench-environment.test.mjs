@@ -187,6 +187,38 @@ test('Cowork Judge 在 safe-path 模式可导入受信同目录依赖，Submissi
   assert.equal(result.total_score, 0.5)
 })
 
+test('Cowork-Bench accepts score/criteria judges and supplies their original input directory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-cowork-score-'))
+  const tests = join(root, 'tests')
+  const input = join(root, 'data', 'input_files')
+  const submission = join(root, 'submission')
+  await mkdir(tests)
+  await mkdir(input, { recursive: true })
+  await mkdir(submission)
+  await writeFile(join(input, 'input.txt'), 'original')
+  const judge = join(tests, 'judge.py')
+  await writeFile(judge, [
+    'import argparse, json',
+    'from pathlib import Path',
+    'p = argparse.ArgumentParser()',
+    'p.add_argument("--artifact-dir")',
+    'p.add_argument("--result")',
+    'p.add_argument("--data-dir", required=True)',
+    'p.add_argument("--input-dir", required=True)',
+    'a = p.parse_args()',
+    'assert a.input_dir == a.data_dir',
+    'assert (Path(a.data_dir) / "input.txt").read_text() == "original"',
+    'Path(a.result).write_text(json.dumps({"score": 0.4, "criteria": [{"id": "R001", "score": 0, "weight": 5, "passed": False, "evidence": "missing"}]}))',
+  ].join('\n'))
+  const output = join(root, 'result.json')
+  await execFileAsync('python3', [resolve(repositoryRoot, 'docker/cowork-bench/run-verifier.py'),
+    '--judge', judge, '--submission', submission, '--output', output, '--expected-id', 'fixture'])
+  const result = JSON.parse(await readFile(output, 'utf8'))
+  assert.equal(result.reward, 0.4)
+  assert.equal(result.criterion_results[0].raw.weight, 5)
+  assert.equal(normalizeCoworkJudgeResult(result, 'fixture').total_score, 0.4)
+})
+
 test('Cowork-Bench 保留未达通过阈值但合法的连续分数', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rsi-cowork-bench-judge-'))
   const submission = join(root, 'submission')
