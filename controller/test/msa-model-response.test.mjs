@@ -107,3 +107,24 @@ test('MSA 对无 choices 的 JSON 留下请求编号，对非法结构明确报�
     assert.match(malformed.error, /invalid choices shape/u)
   }
 })
+
+test('MSA 重试仅含零宽字符的伪空回答，不交给 Agent 消耗解题步数', async (context) => {
+  let requests = 0
+  const server = http.createServer((_request, response) => {
+    requests += 1
+    response.writeHead(200, { 'content-type': 'text/event-stream' })
+    response.end(JSON.stringify({ choices: [{ message: {
+      content: requests < 3 ? '\u200b\u200d\ufeff ' : '<final>recovered</final>',
+    }, finish_reason: 'stop' }] }))
+  })
+  await new Promise((accept) => server.listen(0, '127.0.0.1', accept))
+  context.after(() => new Promise((accept) => server.close(accept)))
+  const script = [
+    'import sys', `sys.path.insert(0, ${JSON.stringify(seedRoot)})`,
+    'import model',
+    `print(model.query("http://127.0.0.1:${server.address().port}", "dummy", "fixture", [], 64))`,
+  ].join('\n')
+  const { stdout } = await execute('python3', ['-c', script], { env: pythonEnv })
+  assert.equal(stdout.trim(), '<final>recovered</final>')
+  assert.equal(requests, 3)
+})

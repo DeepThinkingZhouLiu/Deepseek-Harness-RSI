@@ -6,6 +6,7 @@ import http.client
 import json
 import re
 import time
+import unicodedata
 from urllib.parse import urlsplit
 
 MAXIMUM_TRANSIENT_RESPONSE_ATTEMPTS = 8
@@ -262,7 +263,8 @@ def query(
         if result["refused"] or result["finish_reason"] == "content_filter":
             raise RuntimeError("model gateway refused or filtered the completion")
         text = result["text"].strip()
-        if text:
+        # 零宽空格等纯格式字符也属于空回答，不能占用 Agent 的解题步数。
+        if any(not character.isspace() and unicodedata.category(character) != "Cf" for character in text):
             return text
 
         # 只把“正常结束但正文为空”或“空流”视为一次性上游故障。
