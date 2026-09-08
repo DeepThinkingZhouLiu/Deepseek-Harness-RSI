@@ -8,7 +8,7 @@
     "recipe": "recipes/population-grhs-formal/single-b4.yml",
     "adapters": {
       "target": "adapters/targets/msa-minimal-cowork-rsi.yml",
-      "updater": "adapters/updaters/claude-code-cli.yml",
+      "updater": "adapters/updaters/claude-code-cli-pnx.yml",
       "environment": "environments/cowork-bench-agentbay.yml",
       "providers": {
         "solver": "adapters/providers/zcloud-openai.yml",
