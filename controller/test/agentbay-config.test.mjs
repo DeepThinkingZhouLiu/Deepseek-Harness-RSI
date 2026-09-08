@@ -4,6 +4,21 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { loadExperimentBundle, validateEnvironmentAdapter } from '../src/adapters.mjs'
 import { readConfigFile } from '../src/config.mjs'
+import { concurrentMap } from '../src/environments/omegause-officeval.mjs'
+
+test('AgentBay task scheduler can dispatch 200 tasks concurrently', async () => {
+  let active = 0
+  let release
+  const barrier = new Promise(resolve => { release = resolve })
+  const values = Array.from({ length: 200 }, (_, index) => index)
+  const results = await concurrentMap(values, 200, async value => {
+    if (++active === 200) release()
+    await barrier
+    return value
+  })
+  assert.equal(active, 200)
+  assert.deepEqual(results, values)
+})
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
