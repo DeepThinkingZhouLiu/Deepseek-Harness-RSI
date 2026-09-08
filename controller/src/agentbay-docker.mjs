@@ -35,7 +35,7 @@ function resultOrThrow(result, operation, allowExitCodes = [0]) {
   if (!allowExitCodes.includes(result.exitCode)) {
     throw new ProtocolError(`AgentBay 远端 Docker ${operation} 失败`, [
       `exitCode=${result.exitCode}`,
-      (result.stderr || result.stdout || '').slice(-4000),
+      [result.stdout, result.stderr].filter(Boolean).join('\n').slice(-8000),
     ])
   }
   return { ...result, durationMs: result.durationMs ?? 0, outputTruncated: false }
