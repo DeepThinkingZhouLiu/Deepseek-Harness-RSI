@@ -82,3 +82,15 @@ The dataset root contains `tasks/ppt/`. The evaluator checkout must match the
 revision specified by the environment adapter. Both provider URLs need `/v1`
 because these gateways append the endpoint name; the Claude CLI itself points
 to its container-local gateway, not directly to the provider URL.
+
+For an infrastructure-only repair, `experiment resume --run <run-directory>
+--upgrade-controller` explicitly archives the old Controller state and records
+the new revision. The frozen experiment configuration must remain unchanged.
+Completed task results retain their original runtime provenance and are reused;
+incomplete verifier-stage tasks can reuse their saved Solver output. Use this
+option only after confirming that the repair preserves the scoring semantics
+of already committed results. Normal resume still requires the original revision.
+
+The model gateway retries `403 pre_consume_token_quota_failed` within the existing
+bounded upstream retry budget, with a five-second delay. This does not treat
+invalid-token 401 responses or arbitrary permission failures as transient.

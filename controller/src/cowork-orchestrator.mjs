@@ -1739,6 +1739,7 @@ export function createCoworkBranchEvolutionDriver({
       docker: context.docker,
       runRoot,
     })
+    environment.allowRuntimeRecovery = (state.spec.controllerRecoveries?.length ?? 0) > 0
     const environmentStatus = await environment.preflight()
     if (environmentStatus.sourceRevision !== state.spec.benchmarkSourceRevision) {
       throw new ProtocolError('Cowork Branch 恢复时 Benchmark Source Revision 已变化')
@@ -2930,6 +2931,7 @@ export async function runPopulationEvolution({
 export async function resumePopulationEvolution({
   repositoryRoot,
   runDirectory,
+  allowControllerUpgrade = false,
   onEvent = () => {},
 }) {
   const requestedRunRoot = resolve(runDirectory)
@@ -2974,7 +2976,8 @@ export async function resumePopulationEvolution({
     'Population Experiment Path',
   )
   const controllerRevision = await trustedControllerRevision(repositoryRoot)
-  if (branchStates.some((branchState) => branchState.spec.controllerRevision !== controllerRevision)) {
+  const controllerChanged = branchStates.some((branchState) => branchState.spec.controllerRevision !== controllerRevision)
+  if (controllerChanged && !allowControllerUpgrade) {
     throw new ProtocolError('Population 恢复时 Controller Revision 与 Branch 冻结值不一致')
   }
 
@@ -3012,6 +3015,25 @@ export async function resumePopulationEvolution({
     command: 'experiment resume',
   })
   try {
+    if (controllerChanged) {
+      const recovery = { at: new Date().toISOString(), controllerRevision,
+        previousRevisions: [...new Set(branchStates.map(value => value.spec.controllerRevision))] }
+      const archive = join(runRoot, 'recovery', `controller-${Date.now()}`)
+      await mkdir(archive, { recursive: true })
+      await writeJsonFile(join(archive, 'population-state.json'), parentState)
+      await writeJsonFile(join(archive, 'migration.json'), recovery)
+      for (const branchState of branchStates) {
+        const id = branchState.spec.branchId
+        await writeJsonFile(join(archive, `${id}.json`), branchState)
+        branchState.spec.controllerRevision = controllerRevision
+        branchState.spec.controllerRecoveries = [...(branchState.spec.controllerRecoveries ?? []), recovery]
+        await writeJsonFile(join(runRoot, 'branches', id, 'run', 'state.json'), branchState)
+      }
+      parentState.configFingerprint = loadedCampaign.fingerprint
+      parentState.controllerRecoveries = [...(parentState.controllerRecoveries ?? []), recovery]
+      await writeJsonFile(join(runRoot, 'public', 'state.json'), parentState)
+      onEvent({ stage: 'controller-upgraded', message: '已归档旧状态并升级 Controller，实验配置保持不变' })
+    }
     const orchestrator = new PopulationOrchestrator({
       loadedCampaign,
       campaignsRoot: populationsRoot,

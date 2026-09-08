@@ -98,7 +98,7 @@ test('Cowork 单题真实格式的 Judge 输出经过继承链后，逐项原因
     } },
   })
   environment.ensureRuntime = async () => ({ solverImage: 'fixture' })
-  const trial = await environment.runTrial({
+  const trialOptions = {
     candidateId: 'h0', candidateWorkspace: root, model: {}, partition: 'feedback',
     seed: 1, trialIndex: 0, executionId: 'fixture',
     layout: { instanceId: 'cowork-evo/fixture', taskRoot, task: { instruction: 'fixture' }, inputs: [
@@ -106,8 +106,18 @@ test('Cowork 单题真实格式的 Judge 输出经过继承链后，逐项原因
         bytes: 6, sha256: createHash('sha256').update('source').digest('hex'),
       } },
     ] },
-  })
+  }
+  const trial = await environment.runTrial(trialOptions)
   assert.equal(trial.reward, 0.35)
+  const oldSession = join(trial.trialRoot, 'solver-session')
+  await mkdir(oldSession, { recursive: true })
+  await writeFile(join(oldSession, 'answer.txt'), 'done')
+  environment.allowRuntimeRecovery = true
+  environment.solverDriver.run = async () => { throw new Error('Solver must not rerun for verifier recovery') }
+  const recovered = await environment.runTrial({
+    ...trialOptions, executionId: 'recovery', previousTrialRoot: trial.trialRoot,
+  })
+  assert.equal(recovered.reward, trial.reward)
   assert.match(trial.verifierFeedback, /rule=R001: 章节与表格结构/u)
   assert.match(trial.verifierFeedback, /delta=-10\/0/u)
   assert.match(trial.verifierFeedback, /要求三张表，实际四张表/u)

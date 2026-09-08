@@ -13,7 +13,7 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
-import { writeJsonLines } from '../candidate.mjs'
+import { copyRegularTree, writeJsonLines } from '../candidate.mjs'
 import { assertPathKind, resolveInside } from '../config.mjs'
 import { safeDockerName } from '../docker.mjs'
 import { withGlobalPermit } from '../global-concurrency.mjs'
@@ -628,7 +628,7 @@ export class OmegaUseOfficeValEnvironment {
     return await readResult(output)
   }
 
-  async runTrial({ candidateId, candidateWorkspace, layout, model, partition, seed, trialIndex, executionId }) {
+  async runTrial({ candidateId, candidateWorkspace, layout, model, partition, seed, trialIndex, executionId, previousTrialRoot = null }) {
     const trialRoot = join(
       this.runRoot,
       'trials',
@@ -651,7 +651,22 @@ export class OmegaUseOfficeValEnvironment {
     const instruction = trustedTaskInstruction(layout.task, layout.inputs.map((input) => input.name))
     const startedAt = Date.now()
     const context = { candidateId, partition, instanceId: layout.instanceId, seed }
-    const solver = await runTrialStage({
+    let recoveredSolver = null
+    if (previousTrialRoot && this.allowRuntimeRecovery) {
+      const oldSession = join(previousTrialRoot, 'solver-session')
+      const answer = await readFile(join(oldSession, 'answer.txt'), 'utf8').catch(error => {
+        if (error.code === 'ENOENT') return null
+        throw error
+      })
+      if (answer !== null && await lstat(join(previousTrialRoot, 'submission')).catch(() => null)) {
+        await rename(workspace, join(trialRoot, 'original-inputs'))
+        await copyRegularTree(join(previousTrialRoot, 'workspace'), workspace)
+        await copyRegularTree(oldSession, sessionRoot)
+        recoveredSolver = { answer }
+        trialProgress(context, 'solver-reused')
+      }
+    }
+    const solver = recoveredSolver ?? await runTrialStage({
       trialRoot, context, stage: 'solver',
       maximumAttempts: this.environment.task.maximumSolverAttempts,
       prepareRetry: async (attempt) => {
@@ -831,6 +846,7 @@ export class OmegaUseOfficeValEnvironment {
           taskRoot,
           identity,
           validateRecord: validateCheckpointRecord,
+          allowRuntimeChange: this.allowRuntimeRecovery === true,
         })
         return { layout, taskRoot, identity, validateCheckpointRecord, checkpoint }
       },
@@ -846,8 +862,9 @@ export class OmegaUseOfficeValEnvironment {
           this.environment.task.maximumConcurrentTrials ?? 1,
           async ({ layout, taskRoot, identity, validateCheckpointRecord, checkpoint }) => {
             const context = { candidateId, partition, instanceId: layout.instanceId }
+            let previousTaskRoot = null
             if (checkpoint.status !== 'missing') {
-              await quarantineTrialTask({
+              previousTaskRoot = await quarantineTrialTask({
                 runRoot: this.runRoot,
                 taskRoot,
                 reason: checkpoint.status === 'stale'
@@ -868,6 +885,8 @@ export class OmegaUseOfficeValEnvironment {
                   seed,
                   trialIndex,
                   executionId,
+                  previousTrialRoot: checkpoint.status === 'incomplete' && previousTaskRoot
+                    ? join(previousTaskRoot, `trial-${trialIndex + 1}-seed-${seed}`) : null,
                 }))
               }
               const record = recordForTask({

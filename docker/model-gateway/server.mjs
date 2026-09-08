@@ -591,6 +591,23 @@ const server = http.createServer((request, response) => {
       }
       const upstream = transport.request(target, { method: 'POST', headers }, (upstreamResponse) => {
         const status = upstreamResponse.statusCode ?? 502
+        if (status === 403) {
+          const chunks = []
+          upstreamResponse.on('data', chunk => chunks.push(chunk))
+          upstreamResponse.once('end', () => {
+            const body = Buffer.concat(chunks)
+            let code
+            try { code = JSON.parse(body.toString('utf8')).error?.code } catch {}
+            if (code === 'pre_consume_token_quota_failed' && scheduleRetry({ 'retry-after': '5' })) return
+            usageDelegated = true
+            response.writeHead(status, filteredHeaders(upstreamResponse.headers, responseHeaderAllowlist))
+            response.end(body)
+          })
+          upstreamResponse.once('error', () => {
+            if (!scheduleRetry()) { recordUnknownUsage(); send(response, 502, { error: 'upstream_failure' }) }
+          })
+          return
+        }
         if (retryableUpstreamStatuses.has(status) && attempt <= maximumUpstreamRetries) {
           // 只有在尚未向 Agent 下发 Header/Body 时才能重试，避免重播部分 Completion。
           // 429 遵守有界 Retry-After；其余故障使用指数退避和抖动。

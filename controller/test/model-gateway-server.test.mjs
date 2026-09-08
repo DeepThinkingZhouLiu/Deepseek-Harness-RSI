@@ -435,7 +435,7 @@ test('Model Gateway 按 Solver/Updater 强制覆盖可信模型并分角色计�
   }
 })
 
-test('Model Gateway 在未下发 Header 前有限重试上游 502/503/504', async () => {
+test('Model Gateway retries temporary quota 403 and 502 before forwarding content', async () => {
   const providerKey = 'provider-key-for-retry-test'
   const gatewayToken = 'a'.repeat(64)
   let upstreamAttempts = 0
@@ -444,8 +444,8 @@ test('Model Gateway 在未下发 Header 前有限重试上游 502/503/504', asyn
     request.once('end', () => {
       upstreamAttempts += 1
       if (upstreamAttempts === 1) {
-        response.writeHead(503, { 'content-type': 'application/json' })
-        response.end('{"error":"overloaded"}')
+        response.writeHead(403, { 'content-type': 'application/json' })
+        response.end('{"error":{"code":"pre_consume_token_quota_failed"}}')
         return
       }
       if (upstreamAttempts === 2) {
