@@ -35,6 +35,7 @@ try {
       ANTHROPIC_BASE_URL: new URL(gateway.url).origin, ANTHROPIC_API_KEY: dummyKey,
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_TELEMETRY: '1',
       DISABLE_ERROR_REPORTING: '1', PYTHONDONTWRITEBYTECODE: '1',
+      PYTHONPYCACHEPREFIX: '/tmp/python-cache',
       GIT_DIR: '/opt/harness-rsi/git', GIT_WORK_TREE: '/opt/harness-rsi/candidate',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
