@@ -65,6 +65,7 @@ export function createClaudeCodeDockerUpdaterDriver({ updater, provider, reposit
           ],
           environment: {
             PYTHONDONTWRITEBYTECODE: '1',
+            PYTHONPYCACHEPREFIX: '/tmp/python-cache',
             UPDATER_PROVIDER_URL: baseUrl,
             UPDATER_MODEL: options.model.model,
             UPDATER_EFFORT: options.model.reasoningEffort ?? 'high',

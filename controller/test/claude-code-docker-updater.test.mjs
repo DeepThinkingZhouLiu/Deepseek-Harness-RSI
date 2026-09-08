@@ -33,6 +33,7 @@ test('Remote Claude updater stages candidate, uses gateway credentials and retur
           assert.equal(options.secretEnvironment.UPDATER_PROVIDER_KEY, process.env[keyName])
           assert.equal(options.environment.UPDATER_PROVIDER_KEY, undefined)
           assert.equal(options.environment.PYTHONDONTWRITEBYTECODE, '1')
+          assert.equal(options.environment.PYTHONPYCACHEPREFIX, '/tmp/python-cache')
           assert.equal(options.environment.UPDATER_EFFORT, 'high')
           assert.ok(options.command[0].includes('/opt/harness-rsi/output/report.json'))
           for (const mount of options.mounts) {
