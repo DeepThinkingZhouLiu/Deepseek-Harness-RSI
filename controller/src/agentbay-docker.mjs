@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import process from 'node:process'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -318,7 +319,7 @@ export class AgentBayDockerClient {
     if (options.input !== undefined) throw new ProtocolError('AgentBay Docker MVP 尚不支持 stdin 输入')
     if (hostGateway) throw new ProtocolError('AgentBay Docker 不支持指向 Controller 宿主的 hostGateway')
     if (network === 'host') throw new ProtocolError('安全策略禁止 Docker host 网络')
-    const containerName = safeDockerName(name)
+    const containerName = safeDockerName(`${randomUUID()}-${safeDockerName(name)}`)
     const staged = []
     const retained = new Set()
     try {

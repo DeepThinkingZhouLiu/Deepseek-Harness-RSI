@@ -46,6 +46,11 @@ test('One bridge handles concurrent runs, transfers writable output and supplies
     assert.ok(build.args.includes('DEBIAN_MIRROR=https://mirrors.tencent.com/debian'))
     assert.ok(build.args.includes('PYPI_INDEX_URL=https://mirrors.tencent.com/pypi/simple/'))
     calls.length = 0
+    await Promise.all([client.run({ image: 'solver', name: 'retry-task' }), client.run({ image: 'solver', name: 'retry-task' })])
+    const retryNames = calls.filter(call => call.args?.[0] === 'run').map(call => call.args[call.args.indexOf('--name') + 1])
+    assert.equal(new Set(retryNames).size, 2)
+    for (const name of retryNames) assert.ok(calls.some(call => call.args?.[0] === 'rm' && call.args.includes(name)))
+    calls.length = 0
     const request = client.bridge.request.bind(client.bridge)
     client.bridge.request = async (operation, payload) => {
       if (operation === 'downloadDir' && payload.localPath === '/output/failed') {
@@ -61,7 +66,8 @@ test('One bridge handles concurrent runs, transfers writable output and supplies
     const failedPath = calls.find(call => call.operation === 'downloadDir' && call.localPath === '/output/failed').remotePath
     assert.ok(!calls.some(call => call.operation === 'removePath' && call.remotePath === failedPath))
     assert.ok(calls.some(call => call.operation === 'downloadDir' && call.localPath === '/output/trace'))
-    assert.ok(calls.some(call => call.args?.includes('failed-transfer') && call.args[0] === 'rm'))
+    const failedName = calls.find(call => call.args?.[0] === 'run').args[2]
+    assert.ok(calls.some(call => call.args?.includes(failedName) && call.args[0] === 'rm'))
   } finally {
     names.forEach((name, index) => {
       if (saved[index] === undefined) delete process.env[name]
