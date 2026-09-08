@@ -1303,27 +1303,11 @@ export async function archiveIncompleteCoworkGeneration({
       const siblingId = safeCandidateId(entry.name)
       candidateIds.add(siblingId)
       const siblingRoot = join(candidateRoot, siblingId)
-      const siblingNumber = Number(entry.name.match(/-s([0-9]+)-/u)?.[1] ?? NaN)
-      const siblingCheckpoint = Number.isSafeInteger(siblingNumber) && siblingNumber > 0
-        ? join(
-            runRoot,
-            'generations',
-            `generation-${generation}`,
-            'grhs-group',
-            `sibling-${String(siblingNumber).padStart(3, '0')}.checkpoint.json`,
-          )
-        : null
       const complete = await Promise.all([
         pathExists(join(siblingRoot, 'workspace')),
         pathExists(join(siblingRoot, 'manifest.json')),
         pathExists(join(siblingRoot, 'mutation-diff.json')),
         pathExists(join(siblingRoot, 'mutation-report.json')),
-        siblingCheckpoint === null
-          ? false
-          : lstat(siblingCheckpoint).then((info) => info.isFile() && !info.isSymbolicLink()).catch((error) => {
-              if (error.code === 'ENOENT') return false
-              throw error
-            }),
       ])
       if (!complete.every(Boolean)) incompleteCandidateIds.add(siblingId)
     }

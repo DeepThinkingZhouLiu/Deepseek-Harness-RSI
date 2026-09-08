@@ -134,7 +134,6 @@ test('GRHS 恢复保留已完成 sibling，只归档半成品并保留共享 Gro
     mkdir(results, { recursive: true }),
   ])
   await writeFile(shared, '{"kind":"GrhsStageCheckpoint"}\n')
-  await writeFile(join(groupRoot, 'sibling-001.checkpoint.json'), '{"kind":"GrhsStageCheckpoint"}\n')
   for (const name of ['manifest.json', 'mutation-diff.json', 'mutation-report.json']) {
     await writeFile(join(complete, name), '{}\n')
   }
