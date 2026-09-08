@@ -16,7 +16,7 @@ export function createClaudeCodeDockerUpdaterDriver({ updater, provider, reposit
     if (!await docker.imageExists(image)) {
       await docker.build({ context: repositoryRoot,
         dockerfile: resolve(repositoryRoot, updater.runtime.dockerfile), tag: image,
-        buildArgs: { CLAUDE_VERSION: updater.runtime.version },
+        buildArgs: { CLAUDE_VERSION: updater.runtime.version, DEBIAN_MIRROR: 'http://mirrors.tencent.com/debian' },
       })
       built = true
     }
