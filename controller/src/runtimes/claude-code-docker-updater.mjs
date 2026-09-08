@@ -64,6 +64,7 @@ export function createClaudeCodeDockerUpdaterDriver({ updater, provider, reposit
             { source: controlOutput, target: '/control-output', readOnly: false },
           ],
           environment: {
+            PYTHONDONTWRITEBYTECODE: '1',
             UPDATER_PROVIDER_URL: baseUrl,
             UPDATER_MODEL: options.model.model,
             UPDATER_EFFORT: options.model.reasoningEffort ?? 'high',
