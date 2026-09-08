@@ -1,4 +1,6 @@
+FROM python:3.12-slim-bookworm AS certificates
 FROM node:24-bookworm-slim
+COPY --from=certificates /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 ARG CLAUDE_VERSION=2.1.260
 ARG DEBIAN_MIRROR=http://deb.debian.org/debian
 ARG NPM_REGISTRY=https://registry.npmmirror.com
