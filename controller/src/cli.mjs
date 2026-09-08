@@ -36,7 +36,7 @@ const HELP = `HarnessEvoGym Controller
   harness-rsi experiment baseline --config <experiment.json> [--run-id <id>]
   harness-rsi experiment baseline-pack-export --run <run> --output <pack.json> --id <id> [--branch <branch-id>]
   harness-rsi experiment run --config <experiment.json> [--run-id <id>]
-  harness-rsi experiment resume --run <population-run> [--upgrade-controller]
+  harness-rsi experiment resume --run <population-run> [--upgrade-controller] [--recover-interrupted]
   harness-rsi experiment finalize --run <single-run | population-run> [--recover-infrastructure]
   harness-rsi benchmark validate --config <benchmark.json> [--output <report.json>]
   harness-rsi evaluate compare \\
@@ -254,12 +254,13 @@ async function baselinePackExportCommand(args) {
 
 async function evolveResumeCommand(args) {
   const { options, flags } = parseOptions(args, {
-    valueOptions: new Set(['run', 'output']), booleanFlags: new Set(['upgrade-controller']),
+    valueOptions: new Set(['run', 'output']), booleanFlags: new Set(['upgrade-controller', 'recover-interrupted']),
   })
   const result = await resumePopulationEvolution({
     repositoryRoot: REPOSITORY_ROOT,
     runDirectory: requiredPath(options, 'run'),
     allowControllerUpgrade: flags.has('upgrade-controller'),
+    allowInterruptedRecovery: flags.has('recover-interrupted'),
     onEvent: progress,
   })
   await emit({

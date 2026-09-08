@@ -2932,6 +2932,7 @@ export async function resumePopulationEvolution({
   repositoryRoot,
   runDirectory,
   allowControllerUpgrade = false,
+  allowInterruptedRecovery = false,
   onEvent = () => {},
 }) {
   const requestedRunRoot = resolve(runDirectory)
@@ -2941,9 +2942,12 @@ export async function resumePopulationEvolution({
   const parentState = await readJsonFile(join(runRoot, 'public', 'state.json'))
   const resumableStableState = parentState?.status === 'EVOLVING'
     && parentState.inFlightWave === undefined
+  const interruptedRecovery = allowInterruptedRecovery
+    && parentState?.status === 'EVOLVING'
+    && parentState.inFlightWave !== undefined
   if (parentState?.kind !== 'PopulationCampaignState'
       || parentState.campaignId !== runId
-      || (parentState.status !== 'PAUSED_INFRASTRUCTURE' && !resumableStableState)
+      || (parentState.status !== 'PAUSED_INFRASTRUCTURE' && !resumableStableState && !interruptedRecovery)
       || !Array.isArray(parentState.branches)
       || parentState.branches.length === 0) {
     throw new ProtocolError('Population Run 当前不是可恢复的暂停或稳定状态')
@@ -3015,6 +3019,25 @@ export async function resumePopulationEvolution({
     command: 'experiment resume',
   })
   try {
+    if (interruptedRecovery) {
+      const interruptedAt = new Date().toISOString()
+      const archive = join(runRoot, 'recovery', `interrupted-${Date.now()}`)
+      await mkdir(archive, { recursive: true })
+      await writeJsonFile(join(archive, 'population-state.json'), parentState)
+      parentState.status = 'PAUSED_INFRASTRUCTURE'
+      parentState.updatedAt = interruptedAt
+      parentState.events = [...parentState.events, {
+        sequence: parentState.events.length + 1,
+        type: 'POPULATION_INFRASTRUCTURE_PAUSED',
+        at: interruptedAt,
+        phase: 'wave',
+        epoch: parentState.inFlightWave.epoch,
+        failures: [{ branchId: parentState.inFlightWave.participants[0].branchId,
+          name: 'InterruptedRun', message: 'Operator requested recovery after interrupted Controller', details: [] }],
+      }]
+      await writeJsonFile(join(runRoot, 'public', 'state.json'), parentState)
+      onEvent({ stage: 'interrupted-run-recovered', message: '已归档中断状态并准备恢复 in-flight Wave' })
+    }
     if (controllerChanged) {
       const recovery = { at: new Date().toISOString(), controllerRevision,
         previousRevisions: [...new Set(branchStates.map(value => value.spec.controllerRevision))] }
