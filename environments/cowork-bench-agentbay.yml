@@ -1,0 +1,74 @@
+apiVersion: harness-rsi/v1alpha1
+kind: EnvironmentAdapter
+metadata:
+  id: cowork-bench
+  name: CoworkBench on AgentBay
+spec:
+  protocol: cowork-bench-docker-v1
+  source:
+    datasetRootEnvironment: RSI_COWORK_BENCH_DATASET_ROOT
+    evaluatorRootEnvironment: RSI_COWORK_BENCH_EVALUATOR_ROOT
+    datasetRevision: aac0f28d4596eefbc50041b54ba3bbadf59d6f1b
+    evaluatorRevision: aac0f28d4596eefbc50041b54ba3bbadf59d6f1b
+    manifestPath: benchmarks/cowork-bench-240/task-manifest.json
+    manifestDigest: 7183e1f2b9465271da2f5ac5d403892e631c849edfedc76ffd620165ae6cbb73
+  task:
+    workspacePath: /workspace
+    environmentAssets: environments/omegause-officeval-assets
+    maximumConcurrentTrials: 200
+    maximumSolverAttempts: 5
+    workspaceLimits:
+      maximumFiles: 10000
+      maximumBytes: 1073741824
+      maximumFileBytes: 536870912
+      maximumChangedFiles: 2048
+      maximumChangedBytes: 536870912
+  runtime:
+    image: harness-rsi/cowork-bench:240-v0.2
+    dockerfile: docker/cowork-bench/Dockerfile
+    verifierRunner: docker/cowork-bench/run-verifier.py
+  docker:
+    binary: docker
+    network: bridge
+    runAsCurrentUser: true
+    resources:
+      cpus: 4
+      memory: 8g
+      pids: 512
+      timeoutSeconds: 3600
+    backend: agentbay
+    agentBay:
+      pythonExecutableEnvironment: HARNESS_RSI_AGENTBAY_PYTHON
+      bridgePath: scripts/agentbay-docker-bridge.py
+      imageIdEnvironment: HARNESS_RSI_AGENTBAY_IMAGE_ID
+      policyIdEnvironment: HARNESS_RSI_AGENTBAY_POLICY_ID
+      registryMirror: https://docker.1panel.live
+  modelGateway:
+    image: harness-rsi/model-gateway:v1
+    dockerfile: docker/model-gateway/Dockerfile
+    alias: model-gateway
+    port: 8080
+    egressNetwork: bridge
+    maximumRequestsPerRun: 4096
+    maximumConcurrentRequests: 200
+    maximumUpstreamRetries: 5
+    resources:
+      cpus: 1
+      memory: 512m
+      pids: 128
+  verifier:
+    timeoutSeconds: 1200
+    resources:
+      cpus: 2
+      memory: 4g
+      pids: 256
+  reward:
+    minimum: 0
+    maximum: 1
+    resolvedThreshold: 1
+  feedback:
+    maximumTextBytesPerCase: 32768
+    maximumArtifactEntriesPerCase: 200
+    maximumArtifactBytesPerCase: 65536
+    maximumHistoryEntries: 10
+    maximumHistoryBytes: 131072

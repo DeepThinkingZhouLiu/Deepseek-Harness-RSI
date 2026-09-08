@@ -615,6 +615,44 @@ function rejectUnknownConfiguration(value, allowed, label) {
   if (unknown.length > 0) throw new ProtocolError(`${label} 含有未知字段`, unknown)
 }
 
+function validateDockerTransport(docker, label) {
+  const backend = expectText(docker.backend ?? 'local', `${label}.backend`)
+  if (backend === 'local') {
+    if (docker.agentBay !== undefined) throw new ProtocolError(`${label}.agentBay 仅可用于 agentbay backend`)
+    return { backend, agentBay: null }
+  }
+  if (backend !== 'agentbay') throw new ProtocolError(`${label}.backend 当前仅支持 local 或 agentbay`)
+  const agentBay = expectObject(docker.agentBay, `${label}.agentBay`)
+  rejectUnknownConfiguration(
+    agentBay,
+    new Set([
+      'pythonExecutableEnvironment',
+      'bridgePath',
+      'imageIdEnvironment',
+      'policyIdEnvironment',
+      'registryMirror',
+    ]),
+    `${label}.agentBay`,
+  )
+  const registryMirror = expectText(agentBay.registryMirror ?? 'https://docker.1panel.live', `${label}.agentBay.registryMirror`)
+  if (registryMirror && !/^https:\/\/[A-Za-z0-9._:-]+\/?$/u.test(registryMirror)) {
+    throw new ProtocolError(`${label}.agentBay.registryMirror 必须是无凭据 HTTPS Origin`)
+  }
+  return {
+    backend,
+    agentBay: {
+      pythonExecutableEnvironment: environmentName(
+        agentBay.pythonExecutableEnvironment,
+        `${label}.agentBay.pythonExecutableEnvironment`,
+      ),
+      bridgePath: relativePath(agentBay.bridgePath, `${label}.agentBay.bridgePath`),
+      imageIdEnvironment: environmentName(agentBay.imageIdEnvironment, `${label}.agentBay.imageIdEnvironment`),
+      policyIdEnvironment: environmentName(agentBay.policyIdEnvironment, `${label}.agentBay.policyIdEnvironment`),
+      registryMirror,
+    },
+  }
+}
+
 function validateTextReasoningEnvironment({ id, spec, protocol }) {
   rejectUnknownConfiguration(
     spec,
@@ -868,7 +906,7 @@ function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
   )
   rejectUnknownConfiguration(
     docker,
-    new Set(['binary', 'network', 'runAsCurrentUser', 'resources']),
+    new Set(['binary', 'network', 'runAsCurrentUser', 'resources', 'backend', 'agentBay']),
     'EnvironmentAdapter.spec.docker',
   )
   rejectUnknownConfiguration(
@@ -1026,7 +1064,7 @@ function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
       maximumConcurrentTrials: expectNumber(
         task.maximumConcurrentTrials ?? 1,
         'EnvironmentAdapter.spec.task.maximumConcurrentTrials',
-        { integer: true, min: 1, max: 8 },
+        { integer: true, min: 1, max: docker.backend === 'agentbay' ? 200 : 8 },
       ),
       maximumSolverAttempts: expectNumber(
         task.maximumSolverAttempts ?? 3,
@@ -1041,6 +1079,7 @@ function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
       verifierRunner: relativePath(runtime.verifierRunner, 'EnvironmentAdapter.spec.runtime.verifierRunner'),
     },
     docker: {
+      ...validateDockerTransport(docker, 'EnvironmentAdapter.spec.docker'),
       binary: expectText(docker.binary, 'EnvironmentAdapter.spec.docker.binary'),
       network,
       runAsCurrentUser: expectBoolean(docker.runAsCurrentUser, 'EnvironmentAdapter.spec.docker.runAsCurrentUser'),
@@ -1077,7 +1116,7 @@ function validateOmegaUseOfficeValEnvironment({ id, spec, protocol }) {
       maximumConcurrentRequests: expectNumber(
         modelGateway.maximumConcurrentRequests,
         'EnvironmentAdapter.spec.modelGateway.maximumConcurrentRequests',
-        { integer: true, min: 1, max: 64 },
+        { integer: true, min: 1, max: docker.backend === 'agentbay' ? 200 : 64 },
       ),
       maximumUpstreamRetries: expectNumber(
         modelGateway.maximumUpstreamRetries ?? 2,
