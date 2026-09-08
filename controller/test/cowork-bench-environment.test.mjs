@@ -175,6 +175,8 @@ test('Cowork Judge 在 safe-path 模式可导入受信同目录依赖，Submissi
     docker: { async run(options) {
       assert.equal(options.environment.PYTHONSAFEPATH, '1')
       assert.equal(options.environment.PYTHONPATH, '/verifier/task/tests')
+      assert.equal(options.environment.INPUT_DIR, '/verifier/task/data/input_files')
+      assert.equal(options.environment.DATA_DIR, '/verifier/task/data/input_files')
       assert.equal(options.environment.UserInstallation, 'file:///tmp/libreoffice-profile')
       const staged = options.mounts.find((mount) => mount.target === '/verifier')
       assert.equal(staged.readOnly, true)
@@ -186,7 +188,9 @@ test('Cowork Judge 在 safe-path 模式可导入受信同目录依赖，Submissi
       ], {
         cwd: submission,
         env: { ...process.env, PYTHONSAFEPATH: '1', PYTHONDONTWRITEBYTECODE: '1',
-          PYTHONPATH: join(staged.source, 'task/tests') },
+          PYTHONPATH: join(staged.source, 'task/tests'),
+          INPUT_DIR: join(staged.source, 'task/data/input_files'),
+          DATA_DIR: join(staged.source, 'task/data/input_files') },
       })
     } },
   })

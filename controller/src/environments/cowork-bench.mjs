@@ -261,6 +261,7 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
       ],
       environment: {
         HOME: '/tmp/home', TMPDIR: '/tmp', PYTHONDONTWRITEBYTECODE: '1', PYTHONNOUSERSITE: '1',
+        INPUT_DIR: '/verifier/task/data/input_files', DATA_DIR: '/verifier/task/data/input_files',
         // 容器 UID 没有 passwd 条目时，LibreOffice 无法推导默认用户配置目录。
         UserInstallation: 'file:///tmp/libreoffice-profile',
         // 只允许受信 Judge 的只读目录解析同目录依赖，不把 Submission 加入搜索路径。
