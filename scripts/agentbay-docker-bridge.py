@@ -56,19 +56,32 @@ class Bridge:
                 "AGENTBAY_API_KEY, HARNESS_RSI_AGENTBAY_IMAGE_ID and "
                 "HARNESS_RSI_AGENTBAY_POLICY_ID are required"
             )
-        os.environ.setdefault("AGENTBAY_TIMEOUT_MS", "900000")
+        os.environ["AGENTBAY_TIMEOUT_MS"] = os.environ.get(
+            "HARNESS_RSI_AGENTBAY_REQUEST_TIMEOUT_MS", "120000"
+        )
         self.client = AgentBay()
         existing_session_id = os.environ.get(
             "HARNESS_RSI_AGENTBAY_EXISTING_SESSION_ID", ""
         ).strip()
         self.owns_session = not existing_session_id
         if existing_session_id:
-            attached = self.client.get(existing_session_id)
-            self.session = getattr(attached, "session", None)
+            self.session = None
+            last_error = ""
+            for attempt in range(4):
+                try:
+                    attached = self.client.get(existing_session_id)
+                    self.session = getattr(attached, "session", None)
+                    last_error = getattr(attached, "error_message", "")
+                    if self.session is not None:
+                        break
+                except Exception as exc:
+                    last_error = str(exc)
+                if attempt < 3:
+                    time.sleep(2 ** attempt)
             if self.session is None:
                 raise RuntimeError(
                     "AgentBay existing session attach failed: "
-                    f"{getattr(attached, 'error_message', '')}"
+                    f"{last_error}"
                 )
         else:
             self.session = self._create_session(image_id, policy_id, LifecyclePolicy)
