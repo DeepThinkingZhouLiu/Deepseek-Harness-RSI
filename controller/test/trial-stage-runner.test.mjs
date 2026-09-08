@@ -53,6 +53,7 @@ test('Trial 重试耗尽后抛错，不伪造 0 分；永久错误只运行一�
   for (const [message, expectedAttempts] of [
     ['model gateway returned retryable HTTP 503', 3],
     ['model gateway returned no final content after 1 attempt(s) (finish_reason=tool_calls)', 3],
+    ['model gateway returned no final content after 1 attempt(s) (finish_reason=length)', 3],
     ['model gateway HTTP 401', 1],
     ['ModuleNotFoundError: upstream_verifier', 1],
   ]) {
