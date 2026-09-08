@@ -241,6 +241,8 @@ export class ModelGateway {
         docker: this.docker,
         repositoryRoot: this.repositoryRoot,
       })
+      await this.docker.removeContainer(containerName)
+      await this.docker.removeNetwork(networkName)
       this.network = await this.docker.createNetwork({ name: networkName, internal: true })
       this.container = await this.docker.runDetached({
         image: this.config.image,

@@ -27,8 +27,8 @@ test('Model Gateway 只把一次性令牌和内部地址交给 Agent', async () 
     },
     async connectNetwork() {},
     async containerHealth() { return 'healthy' },
-    async removeContainer() {},
-    async removeNetwork() {},
+    async removeContainer(name) { calls.push(['remove-container', name]) },
+    async removeNetwork(name) { calls.push(['remove-network', name]) },
     async containerLogs() { return { stdout: '', stderr: '' } },
     async exec(options) {
       calls.push(['exec', options])
@@ -104,6 +104,8 @@ test('Model Gateway 只把一次性令牌和内部地址交给 Agent', async () 
     assert.notEqual(renewedSolverAccess.secretEnvironment.TEST_RSI_API_KEY, expiredSolverToken)
     assert.notEqual(access.secretEnvironment.TEST_RSI_API_KEY, solverAccess.secretEnvironment.TEST_RSI_API_KEY)
     const runOptions = calls.find(([name]) => name === 'run')[1]
+    assert.ok(calls.findIndex(([name]) => name === 'remove-container') < calls.findIndex(([name]) => name === 'run'))
+    assert.ok(calls.findIndex(([name]) => name === 'remove-network') < calls.findIndex(([name]) => name === 'run'))
     assert.equal(runOptions.environment.GATEWAY_TOKEN, undefined)
     assert.equal(runOptions.environment.GATEWAY_MAX_UPSTREAM_RETRIES, '5')
     assert.equal(runOptions.secretEnvironment.GATEWAY_TOKEN.length, 64)
