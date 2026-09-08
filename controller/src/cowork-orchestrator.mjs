@@ -386,6 +386,7 @@ async function createContext({
     throw new ProtocolError('Updater Adapter Revision 与复用的 Target Source Revision 不一致')
   }
   const updaterSourceRevision = updaterSource?.revision ?? bundle.updater.runtime.distributionDigest
+    ?? bundle.updater.runtime.image
   const baselineTemplate = bundle.target.materialization.baselinePath
     ? resolveInside(repositoryRoot, bundle.target.materialization.baselinePath, 'Target Baseline Path')
     : null

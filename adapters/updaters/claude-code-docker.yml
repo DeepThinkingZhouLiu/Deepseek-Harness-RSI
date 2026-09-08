@@ -1,0 +1,22 @@
+apiVersion: harness-rsi/v1alpha1
+kind: UpdaterAdapter
+metadata:
+  id: claude-code-docker
+  name: Claude Code Docker Updater
+spec:
+  protocol: claude-code-docker-v1
+  runtime:
+    image: harness-rsi/claude-updater:2.1.260-v1
+    dockerfile: docker/claude-updater/Dockerfile
+    version: 2.1.260
+    maximumModelRequests: 64
+    secretEnvironment:
+      - RSI_CLAUDE_PROVIDER_API_KEY
+      - RSI_CLAUDE_PROVIDER_BASE_URL
+  prompt:
+    path: prompts/updater.md
+  output:
+    candidate: filesystem-diff
+    mutationReport:
+      kind: controller-artifact
+      name: mutation-report.json

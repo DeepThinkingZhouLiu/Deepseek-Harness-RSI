@@ -480,6 +480,7 @@ export function validateUpdaterAdapter(input) {
     'dsh-headless-docker-v1',
     'codex-exec-v1',
     'claude-code-exec-v1',
+    'claude-code-docker-v1',
   ].includes(protocol)) {
     throw new ProtocolError(`当前未实现 Updater Protocol：${protocol}`)
   }
@@ -490,6 +491,21 @@ export function validateUpdaterAdapter(input) {
     'UpdaterAdapter.spec.output.mutationReport.name',
   )
   if (mutationReportName.includes('/')) throw new ProtocolError('Mutation Report name 必须是单个文件名')
+  if (protocol === 'claude-code-docker-v1') {
+    const runtime = expectObject(spec.runtime, 'UpdaterAdapter.spec.runtime')
+    return {
+      apiVersion: API_VERSION, kind: 'UpdaterAdapter', id, protocol, source: null,
+      runtime: {
+        image: expectText(runtime.image, 'Updater runtime image'),
+        dockerfile: relativePath(runtime.dockerfile, 'Updater runtime dockerfile'),
+        package: '@anthropic-ai/claude-code',
+        version: expectText(runtime.version, 'Updater runtime version'),
+        maximumModelRequests: expectNumber(runtime.maximumModelRequests ?? 64, 'Updater maximumModelRequests', { integer: true, min: 1, max: 128 }),
+        secretEnvironment: expectStringArray(runtime.secretEnvironment, 'Updater secretEnvironment'),
+      },
+      promptPath: relativePath(prompt.path, 'UpdaterAdapter.spec.prompt.path'), mutationReportName,
+    }
+  }
   if (['codex-exec-v1', 'claude-code-exec-v1'].includes(protocol)) {
     if (spec.source !== undefined) {
       throw new ProtocolError(`${protocol === 'codex-exec-v1' ? 'Codex' : 'Claude Code'} Updater 不接受 Source；运行时由固定 distribution 提供`)
@@ -1449,7 +1465,7 @@ export async function loadExperimentBundle(experimentPath, repositoryRoot) {
   if (solverProvider.protocol !== 'openai-chat-completions') {
     throw new ProtocolError('当前 Solver Driver 只支持 OpenAI Chat Completions Provider')
   }
-  const updaterProviderProtocols = updater.protocol === 'claude-code-exec-v1'
+  const updaterProviderProtocols = ['claude-code-exec-v1', 'claude-code-docker-v1'].includes(updater.protocol)
     ? ['anthropic-messages']
     : ['openai-chat-completions']
   if (!updaterProviderProtocols.includes(updaterProvider.protocol)) {

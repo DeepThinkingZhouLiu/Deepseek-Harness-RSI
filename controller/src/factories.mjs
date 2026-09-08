@@ -14,6 +14,7 @@ import {
 import { createMsaMinimalCoworkSolverDriver } from './runtimes/msa-minimal-cowork.mjs'
 import { createCodexUpdaterDriver } from './runtimes/codex-updater.mjs'
 import { createClaudeCodeUpdaterDriver } from './runtimes/claude-code-updater.mjs'
+import { createClaudeCodeDockerUpdaterDriver } from './runtimes/claude-code-docker-updater.mjs'
 
 const DRIVER_PROTOCOL = /^[a-z0-9]+(?:-[a-z0-9]+)*-v[0-9]+$/u
 const ENVIRONMENT_FACTORIES = new Map()
@@ -272,6 +273,7 @@ registerSolverDriver('msa-minimal-docker-v1', createMsaMinimalCoworkSolverDriver
 registerUpdaterDriver('dsh-headless-docker-v1', createDshUpdaterDriver)
 registerUpdaterDriver('codex-exec-v1', createCodexUpdaterDriver)
 registerUpdaterDriver('claude-code-exec-v1', createClaudeCodeUpdaterDriver)
+registerUpdaterDriver('claude-code-docker-v1', createClaudeCodeDockerUpdaterDriver)
 
 export function createSolverDriver(options) {
   const protocol = options.target.solver.protocol === 'dsh-headless-docker'
