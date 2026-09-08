@@ -169,6 +169,22 @@ test('Cowork-Bench 240 正式实验固定为 N1-K4-B4 和三段式全量划分',
   assert.equal(bundle.experiment.models.updater.maxTokens, 65536)
 })
 
+test('Cowork v0.2 两题闭环验收保留正式模型、策略、重试和原始分区', async () => {
+  const formal = await loadExperimentBundle(resolve(repositoryRoot, 'experiments/cowork-bench-grhs-full-claude-single-b4.json'), repositoryRoot)
+  const smoke = await loadExperimentBundle(resolve(repositoryRoot, 'experiments/cowork-bench-grhs-v02-two-task-claude-b4.json'), repositoryRoot)
+  assert.deepEqual(smoke.experiment.models, formal.experiment.models)
+  assert.deepEqual(smoke.environment, formal.environment)
+  assert.deepEqual(smoke.recipe, formal.recipe)
+  assert.deepEqual(smoke.policy, formal.policy)
+  assert.equal(smoke.environment.task.maximumSolverAttempts, 5)
+  assert.equal(smoke.benchmark.partitions.feedback.instanceIds.length, 2)
+  for (const partition of ['feedback', 'selection', 'final']) {
+    for (const id of smoke.benchmark.partitions[partition].instanceIds) {
+      assert.ok(formal.benchmark.partitions[partition].instanceIds.includes(id))
+    }
+  }
+})
+
 test('Experiment 拒绝 provider/providers 同时声明与 Updater Provider 协议错配', async () => {
   const config = await readConfigFile(resolve(
     repositoryRoot,

@@ -14,7 +14,7 @@ spec:
   materialization:
     strategy: source-plus-seed-overlay
     seedPath: targets/msa-minimal/cowork-v1
-    seedDigest: 5f33772513bdefd0daf7b799dce095535d332dea73956114997aa336dd683aed
+    seedDigest: 4bb20e6d6d4ab3d16dc4c5fffef1976f68e8eed31538081964875d85b6ba0566
     overrides:
       - agent.py
       - image_tool.py

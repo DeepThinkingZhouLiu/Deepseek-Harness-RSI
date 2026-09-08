@@ -94,6 +94,7 @@ const responseHeaderAllowlist = new Set([
   'retry-after',
   'x-deepseek-request-id',
   'x-request-id',
+  'x-oneapi-request-id',
 ])
 
 function filteredHeaders(headers, allowlist) {
@@ -195,6 +196,7 @@ function usageSnapshot(counters = globalUsage) {
 function createSseUsageMeter(counters) {
   const decoder = new StringDecoder('utf8')
   let buffer = ''
+  let jsonBuffer = ''
   let latestUsage = null
   let completed = false
 
@@ -217,6 +219,14 @@ function createSseUsageMeter(counters) {
     completed = true
     buffer += decoder.end()
     if (buffer) inspectLine(buffer)
+    // 少数兼容上游将 JSON 标记为 SSE；按正文计量，不改变转发字节。
+    if (jsonBuffer !== null) {
+      try {
+        latestUsage = parsedUsage(JSON.parse(jsonBuffer.trimStart())?.usage) ?? latestUsage
+      } catch {
+        // 非完整 JSON 不补造 Usage，仍按未知响应记账。
+      }
+    }
     if (!latestUsage) {
       for (const counter of counters) counter.unknownUsageResponses += 1
       return
@@ -231,7 +241,13 @@ function createSseUsageMeter(counters) {
   }
 
   function inspectChunk(chunk) {
-    buffer += decoder.write(chunk)
+    const text = decoder.write(chunk)
+    buffer += text
+    if (jsonBuffer !== null) {
+      jsonBuffer += text
+      const start = jsonBuffer.trimStart()
+      if ((start && !start.startsWith('{')) || jsonBuffer.length > 4 * 1024 * 1024) jsonBuffer = null
+    }
     let newline = buffer.indexOf('\n')
     while (newline >= 0) {
       inspectLine(buffer.slice(0, newline))

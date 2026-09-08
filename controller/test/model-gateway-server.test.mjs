@@ -149,7 +149,11 @@ test('Model Gateway 校验令牌并只向固定 chat/completions 转发', async 
         authorization: request.headers.authorization,
         body: Buffer.concat(chunks).toString('utf8'),
       })
-      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.writeHead(200, { 'content-type': 'text/event-stream', 'x-oneapi-request-id': 'fixture-request-123' })
+      if (upstreamRequests.length === 2) {
+        response.end(JSON.stringify({ choices: [{ message: { content: 'JSON despite SSE header' } }], usage: { prompt_tokens: 2, completion_tokens: 1 } }))
+        return
+      }
       response.end([
         'data: {"choices":[{"delta":{"content":"ok"}}]}',
         '',
@@ -210,6 +214,7 @@ test('Model Gateway 校验令牌并只向固定 chat/completions 转发', async 
       },
     })
     assert.equal(proxied.status, 200)
+    assert.equal(proxied.headers.get('x-oneapi-request-id'), 'fixture-request-123')
     assert.match(await proxied.text(), /delta/u)
     assert.deepEqual(upstreamRequests, [{
       path: '/v1/chat/completions',
@@ -230,6 +235,18 @@ test('Model Gateway 校验令牌并只向固定 chat/completions 转发', async 
       cacheReadTokens: 3,
       reasoningTokens: 2,
     })
+    const jsonResponse = await fetch(`${gatewayUrl}/chat/completions`, {
+      method: 'POST', body,
+      headers: { authorization: `Bearer ${gatewayToken}`, 'content-type': 'application/json' },
+    })
+    assert.equal((await jsonResponse.json()).choices[0].message.content, 'JSON despite SSE header')
+    const jsonUsage = await fetch(`${gatewayUrl}/rsi/usage`, {
+      headers: { authorization: `Bearer ${gatewayToken}` },
+    }).then((response) => response.json())
+    assert.equal(jsonUsage.usageResponses, 2)
+    assert.equal(jsonUsage.unknownUsageResponses, 0)
+    assert.equal(jsonUsage.inputTokens, 13)
+    assert.equal(jsonUsage.outputTokens, 8)
   } finally {
     child.kill('SIGTERM')
     if (child.exitCode === null) await new Promise((resolveExit) => child.once('exit', resolveExit))
