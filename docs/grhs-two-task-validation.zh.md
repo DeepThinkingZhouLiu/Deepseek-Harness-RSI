@@ -16,4 +16,6 @@
 
 本轮传输修复按正文识别 JSON/SSE，支持多行 SSE data，拒绝未完成的流；错误保留安全的错误码与上游请求编号，不回显错误正文或密钥。真正的空流、仅含零宽字符的回答均按空响应处理并重试，不占用 Agent 解题步数。Gateway 原始转发字节保持不变，JSON 回退响应也正常计量 Usage。
 
+验收还应核对 Updater 实际读取的 FeedbackPacket：Cowork Judge 的 `criterion_id / score / evidence` 必须转换为 Office 反馈格式器使用的逐项字段，保留规则编号、说明和证据。负权重项的 `score=0` 表示触发扣分；逐项映射不重新计算总分，Judge 原始 `reward`（包括 hurdle cap）保持不变。只看到总分正确、逐项说明为空，不能算反馈链路验收通过。
+
 修改 H0 种子或 Controller 后必须使用新的 run-id。旧运行产物保留，不能将不同摘要的 Candidate 混进同一个实验。

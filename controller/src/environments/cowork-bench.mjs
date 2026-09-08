@@ -80,7 +80,31 @@ async function listInputFiles(root) {
   return files
 }
 
-function normalizeJudgeResult(result, instanceId) {
+function normalizeCriterion(item, index, instanceId) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)
+      || typeof item.score !== 'number' || !Number.isFinite(item.score)
+      || item.score < 0 || item.score > 1) {
+    throw new ProtocolError(`Cowork Judge criterion_results[${index}] score 必须位于 [0,1]：${instanceId}`)
+  }
+  const raw = item.raw && typeof item.raw === 'object' && !Array.isArray(item.raw) ? item.raw : {}
+  const weight = raw.weight ?? 1
+  if (typeof weight !== 'number' || !Number.isFinite(weight)) {
+    throw new ProtocolError(`Cowork Judge criterion_results[${index}] weight 无效：${instanceId}`)
+  }
+  const evidence = typeof item.evidence === 'string' ? item.evidence : JSON.stringify(item.evidence ?? '')
+  const delta = weight < 0 ? (1 - item.score) * weight : item.score * weight
+  // Cowork 的 score 是归一化完成度；负权重项 score=0 表示触发扣分。
+  // 这里只映射逐项反馈，总分仍原样使用 Judge 的 reward，不重新计算或绕过 hurdle cap。
+  return {
+    hit: typeof raw.passed === 'boolean' ? raw.passed : weight < 0 ? item.score < 1 : item.score > 0,
+    delta: delta === 0 ? 0 : delta,
+    max_delta: Math.max(0, weight),
+    rule: [item.criterion_id ?? `criterion-${index + 1}`, raw.description].filter(Boolean).join(': '),
+    detail: `score=${item.score}/1${raw.type ? ` type=${raw.type}` : ''} evidence=${evidence}`,
+  }
+}
+
+export function normalizeCoworkJudgeResult(result, instanceId) {
   if (!result || typeof result !== 'object' || Array.isArray(result)) {
     throw new ProtocolError(`Cowork Judge 返回值不是对象：${instanceId}`)
   }
@@ -96,7 +120,8 @@ function normalizeJudgeResult(result, instanceId) {
     error: '',
     dim1_pass: true,
     dim1_reason: 'Cowork-Bench Judge',
-    dim2_items: criteria,
+    // 继承的 Office Feedback 格式器读取 hit/delta/rule/detail，不能直接传 Cowork 原始字段。
+    dim2_items: criteria.map((item, index) => normalizeCriterion(item, index, instanceId)),
     total_score: reward,
     max_score: 1,
   }
@@ -250,6 +275,6 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
       resources: this.environment.verifier.resources,
     })
     const result = JSON.parse(await readFile(output, 'utf8'))
-    return normalizeJudgeResult(result, layout.instanceId)
+    return normalizeCoworkJudgeResult(result, layout.instanceId)
   }
 }

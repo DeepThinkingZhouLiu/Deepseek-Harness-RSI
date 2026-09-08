@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -7,10 +8,122 @@ import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 import { promisify } from 'node:util'
 
-import { adaptCoworkWorkspaceInstruction, CoworkBenchEnvironment } from '../src/environments/cowork-bench.mjs'
+import {
+  adaptCoworkWorkspaceInstruction, CoworkBenchEnvironment, normalizeCoworkJudgeResult,
+} from '../src/environments/cowork-bench.mjs'
+import { buildFeedbackPacket } from '../src/feedback.mjs'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const execFileAsync = promisify(execFile)
+
+function judgeFeedbackFixture() {
+  return {
+    reward: 0.35,
+    criterion_results: [
+      { criterion_id: 'R001', score: 0, evidence: '要求三张表，实际四张表',
+        raw: { description: '章节与表格结构', weight: 4, type: 'hurdle', passed: false } },
+      { criterion_id: 'R002', score: 0.5, evidence: '两项字段只有一项正确',
+        raw: { description: '字段完整', weight: 6, type: 'positive' } },
+      { criterion_id: 'R010', score: 0, evidence: '关键字段错误，触发扣分',
+        raw: { description: '关键字段错误', weight: -10, type: 'penalty', passed: true } },
+      { criterion_id: 'R011', score: 1, evidence: '文档可以渲染，未触发扣分',
+        raw: { description: '不可渲染', weight: -10, type: 'penalty', passed: false } },
+      { criterion_id: 'R012', score: 1, evidence: '不带 raw 的 OfficeBench 标准结果' },
+    ],
+  }
+}
+
+test('Cowork Judge 逐项说明映射到 Office Feedback，保留正分与扣分且不重算总分', () => {
+  const raw = judgeFeedbackFixture()
+  const before = structuredClone(raw)
+  const result = normalizeCoworkJudgeResult(raw, 'fixture')
+  assert.equal(result.total_score, 0.35)
+  assert.equal(result.max_score, 1)
+  assert.deepEqual(raw, before)
+  assert.deepEqual(result.dim2_items.map(({ hit, delta, max_delta }) => ({ hit, delta, max_delta })), [
+    { hit: false, delta: 0, max_delta: 4 },
+    { hit: true, delta: 3, max_delta: 6 },
+    { hit: true, delta: -10, max_delta: 0 },
+    { hit: false, delta: 0, max_delta: 0 },
+    { hit: true, delta: 1, max_delta: 1 },
+  ])
+  assert.match(result.dim2_items[0].rule, /R001: 章节与表格结构/u)
+  assert.match(result.dim2_items[0].detail, /要求三张表，实际四张表/u)
+  assert.match(result.dim2_items[2].detail, /score=0\/1 type=penalty/u)
+  assert.match(result.dim2_items[4].detail, /不带 raw/u)
+  assert.deepEqual(normalizeCoworkJudgeResult({ reward: 0 }, 'fixture').dim2_items, [])
+})
+
+test('Cowork Judge 非法逐项得分与权重必须报错，不能伪装成空反馈', () => {
+  for (const score of [undefined, null, '1', -1, 2, NaN, Infinity]) {
+    assert.throws(() => normalizeCoworkJudgeResult({
+      reward: 0.5, criterion_results: [{ criterion_id: 'R001', score }],
+    }, 'fixture'), /score 必须位于/u)
+  }
+  assert.throws(() => normalizeCoworkJudgeResult({
+    reward: 0.5, criterion_results: [{ score: 1, raw: { weight: 'bad' } }],
+  }, 'fixture'), /weight 无效/u)
+})
+
+test('Cowork 单题真实格式的 Judge 输出经过继承链后，逐项原因进入 Updater FeedbackPacket', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-cowork-feedback-fields-'))
+  const taskRoot = join(root, 'task')
+  const input = join(taskRoot, 'data', 'input_files', 'source.txt')
+  await Promise.all([
+    mkdir(join(taskRoot, 'tests'), { recursive: true }),
+    mkdir(join(taskRoot, 'data', 'input_files'), { recursive: true }),
+  ])
+  await Promise.all([
+    writeFile(input, 'source'), writeFile(join(taskRoot, 'rubric.json'), '{}'),
+    writeFile(join(taskRoot, 'task.toml'), ''), writeFile(join(taskRoot, 'tests', 'judge.py'), '# fixture\n'),
+  ])
+  const environment = new CoworkBenchEnvironment({
+    runRoot: root, repositoryRoot,
+    environment: {
+      task: { workspacePath: '/workspace', maximumSolverAttempts: 5, workspaceLimits: {
+        maximumFiles: 10, maximumBytes: 1024, maximumFileBytes: 1024,
+        maximumChangedFiles: 10, maximumChangedBytes: 1024,
+      } },
+      docker: { resources: { timeoutSeconds: 10 } },
+      verifier: { timeoutSeconds: 10, resources: {} },
+      feedback: { maximumTextBytesPerCase: 32768 },
+    },
+    solverDriver: { async run({ taskWorkspace }) {
+      await writeFile(join(taskWorkspace, 'done.docx'), 'fixture artifact')
+      return { answer: 'done' }
+    } },
+    docker: { async run(options) {
+      const logs = options.mounts.find((mount) => mount.target === '/logs').source
+      await writeFile(join(logs, 'result.json'), JSON.stringify(judgeFeedbackFixture()))
+    } },
+  })
+  environment.ensureRuntime = async () => ({ solverImage: 'fixture' })
+  const trial = await environment.runTrial({
+    candidateId: 'h0', candidateWorkspace: root, model: {}, partition: 'feedback',
+    seed: 1, trialIndex: 0, executionId: 'fixture',
+    layout: { instanceId: 'cowork-evo/fixture', taskRoot, task: { instruction: 'fixture' }, inputs: [
+      { source: input, name: 'source.txt', record: {
+        bytes: 6, sha256: createHash('sha256').update('source').digest('hex'),
+      } },
+    ] },
+  })
+  assert.equal(trial.reward, 0.35)
+  assert.match(trial.verifierFeedback, /rule=R001: 章节与表格结构/u)
+  assert.match(trial.verifierFeedback, /delta=-10\/0/u)
+  assert.match(trial.verifierFeedback, /要求三张表，实际四张表/u)
+  assert.equal((await readFile(join(trial.trialRoot, 'verifier-feedback.txt'), 'utf8')).trim(), trial.verifierFeedback)
+  const packet = buildFeedbackPacket({
+    runId: 'fixture', generation: 1, candidateId: 'h0',
+    benchmark: { id: 'fixture', source: { revision: 'fixture' },
+      partitions: { feedback: { instanceIds: ['cowork-evo/fixture'] } } },
+    records: new Map([['cowork-evo/fixture', {
+      instanceId: 'cowork-evo/fixture', reward: trial.reward, status: 'unresolved',
+      feedback: { taskInstruction: 'fixture', solverAnswer: 'done', verifierFeedback: trial.verifierFeedback, errors: [] },
+    }]]), maximumTextBytesPerCase: 32768,
+  })
+  assert.match(JSON.stringify(packet), /要求三张表，实际四张表/u)
+  assert.match(JSON.stringify(packet), /关键字段错误，触发扣分/u)
+})
 
 test('Cowork-Bench 将 Harbor 输入输出路径映射到持久化 Solver Workspace', () => {
   const instruction = [
