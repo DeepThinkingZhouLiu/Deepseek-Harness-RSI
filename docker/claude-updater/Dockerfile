@@ -1,8 +1,8 @@
 FROM node:24-bookworm-slim
 ARG CLAUDE_VERSION=2.1.260
-ARG DEBIAN_MIRROR=deb.debian.org
+ARG DEBIAN_MIRROR=http://deb.debian.org/debian
 ARG NPM_REGISTRY=https://registry.npmmirror.com
-RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+RUN sed -i "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
     && apt-get update && apt-get install -y --no-install-recommends git python3 ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && npm install --global --registry=${NPM_REGISTRY} @anthropic-ai/claude-code@${CLAUDE_VERSION}
