@@ -52,6 +52,7 @@ test('Trial 瞬时错误先落盘，再准备重试，并保留每次错误', as
 test('Trial 重试耗尽后抛错，不伪造 0 分；永久错误只运行一次', async () => {
   for (const [message, expectedAttempts] of [
     ['model gateway returned retryable HTTP 503', 3],
+    ['model gateway HTTP 403 (code=pre_consume_token_quota_failed)', 3],
     ['model gateway returned no final content after 1 attempt(s) (finish_reason=tool_calls)', 3],
     ['model gateway returned no final content after 1 attempt(s) (finish_reason=length)', 3],
     ['model gateway HTTP 401', 1],

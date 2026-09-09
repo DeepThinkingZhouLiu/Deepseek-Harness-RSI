@@ -22,6 +22,7 @@ function safeText(value) {
 export function retryableTrialError(error) {
   if (typeof error?.retryable === 'boolean') return error.retryable
   const text = [error?.message, ...(error?.details ?? [])].join('\n')
+  if (/HTTP\s+403\b[\s\S]*pre_consume_token_quota_failed/iu.test(text)) return true
   // 配置、协议、权限、语法和安全校验失败无法靠重复执行恢复。
   if (/HTTP\s+(?:400|401|403|404|413|422)\b|ModuleNotFoundError|SyntaxError|PermissionError/iu.test(text)) return false
   return error?.processResult?.timedOut === true

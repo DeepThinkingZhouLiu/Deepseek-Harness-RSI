@@ -270,3 +270,23 @@ test('Cowork-Bench 保留未达通过阈值但合法的连续分数', async () =
     passed: false,
   })
 })
+
+test('Cowork-Bench Judge 因提交内容无法解析而退出 1 时记为 0 分', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-cowork-bench-malformed-'))
+  const submission = join(root, 'submission')
+  const judge = join(root, 'judge.py')
+  const output = join(root, 'result.json')
+  await mkdir(submission)
+  await writeFile(judge, 'raise ValueError("malformed workbook")\n')
+  await execFileAsync('python3', [
+    resolve(repositoryRoot, 'docker/cowork-bench/run-verifier.py'),
+    '--judge', judge,
+    '--submission', submission,
+    '--output', output,
+    '--expected-id', 'malformed-workbook',
+  ])
+  const result = JSON.parse(await readFile(output, 'utf8'))
+  assert.equal(result.reward, 0)
+  assert.equal(result.passed, false)
+  assert.match(result.judge_error, /malformed workbook/u)
+})
