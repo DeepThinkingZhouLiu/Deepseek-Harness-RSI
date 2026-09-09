@@ -219,8 +219,10 @@ test('Cowork-Bench accepts score/criteria judges and supplies their original inp
     'p.add_argument("--result")',
     'p.add_argument("--data-dir", required=True)',
     'p.add_argument("--input-dir", required=True)',
+    'p.add_argument("--source-dir", required=True)',
     'a = p.parse_args()',
     'assert a.input_dir == a.data_dir',
+    'assert a.source_dir == a.data_dir',
     'assert (Path(a.data_dir) / "input.txt").read_text() == "original"',
     'Path(a.result).write_text(json.dumps({"score": 0.4, "criteria": [{"id": "R001", "score": 0, "weight": 5, "passed": False, "evidence": "missing"}]}))',
   ].join('\n'))

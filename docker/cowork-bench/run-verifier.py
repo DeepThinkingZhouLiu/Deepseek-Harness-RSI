@@ -53,7 +53,7 @@ def main() -> None:
     ]
     if declares_option(judge_path, "--reward-file"):
         command.extend(["--reward-file", str(reward_file)])
-    for option in ("--data-dir", "--input-dir"):
+    for option in ("--data-dir", "--input-dir", "--source-dir"):
         if declares_option(judge_path, option):
             command.extend([option, str(judge_path.parent.parent / "data" / "input_files")])
     process = subprocess.run(
