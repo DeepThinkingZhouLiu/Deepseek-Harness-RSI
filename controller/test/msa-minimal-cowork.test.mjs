@@ -403,6 +403,43 @@ test('MSA Solver Driver 并发 Batch 只对网关 Usage 做一次总差分', asy
   assert.deepEqual(gatewayCalls.map(([action]) => action), ['usage', 'access', 'usage'])
 })
 
+test('MSA Solver Driver 允许多个并行 Partition 共享同一个 Usage Batch', async () => {
+  const snapshots = [
+    {
+      acceptedRequests: 0, usageResponses: 0, unknownUsageResponses: 0,
+      inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, reasoningTokens: 0,
+      activeRequests: 0,
+    },
+    {
+      acceptedRequests: 4, usageResponses: 4, unknownUsageResponses: 0,
+      inputTokens: 80, outputTokens: 20, cacheReadTokens: 0, reasoningTokens: 0,
+      activeRequests: 0,
+    },
+  ]
+  let usageCalls = 0
+  const driver = createMsaMinimalCoworkSolverDriver({
+    target: { solver: { protocol: 'msa-minimal-docker-v1', runtime } },
+    provider,
+    docker: {},
+    repositoryRoot,
+    sourceRevision,
+    sourcePath: 'sources/msa-minimal-harness',
+    modelGateway: {
+      async usage() {
+        usageCalls += 1
+        return snapshots.shift()
+      },
+    },
+  })
+
+  await Promise.all([driver.beginUsageBatch(), driver.beginUsageBatch()])
+  assert.equal(await driver.endUsageBatch(), null)
+  const usage = await driver.endUsageBatch()
+  assert.equal(usage.acceptedRequests, 4)
+  assert.equal(usageCalls, 2)
+  assert.equal(driver.usage().totalTokens, 100)
+})
+
 test('MSA Cowork CandidateSeed Python 可解析，Chat Client 可读取 SSE', async (context) => {
   const seedRoot = resolve(repositoryRoot, 'targets/msa-minimal/cowork-v1')
   const pythonFiles = ['agent.py', 'model.py', 'run.py'].map((name) => join(seedRoot, name))

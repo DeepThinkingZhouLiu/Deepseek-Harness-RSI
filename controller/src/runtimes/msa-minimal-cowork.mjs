@@ -502,12 +502,17 @@ export function createMsaMinimalCoworkSolverDriver({
     },
     async beginUsageBatch() {
       if (!modelGateway) throw new ProtocolError('MSA Solver Usage Batch 需要 Model Gateway')
-      if (usageBatch !== null) throw new ProtocolError('MSA Solver Usage Batch 不能嵌套')
-      usageBatch = { before: await modelGateway.usage('solver') }
+      if (usageBatch === null) {
+        usageBatch = { participants: 0, before: modelGateway.usage('solver') }
+      }
+      usageBatch.participants += 1
+      await usageBatch.before
     },
     async endUsageBatch() {
       if (usageBatch === null) throw new ProtocolError('MSA Solver Usage Batch 尚未开始')
-      const { before } = usageBatch
+      usageBatch.participants -= 1
+      if (usageBatch.participants > 0) return null
+      const before = await usageBatch.before
       usageBatch = null
       const usage = diffModelUsage(before, await modelGateway.usage('solver'))
       addUsage(measuredUsage, usage)
