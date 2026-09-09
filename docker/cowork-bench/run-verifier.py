@@ -73,7 +73,7 @@ def main() -> None:
         result["reward"] = result["score"]
     if "criterion_results" not in result and "criteria" in result:
         result["criterion_results"] = [
-            {"criterion_id": item["id"], "score": item["score"],
+            {"criterion_id": item.get("criterion_id", item.get("id")), "score": item["score"],
              "evidence": item.get("evidence", ""), "raw": item}
             for item in result["criteria"]
         ]
