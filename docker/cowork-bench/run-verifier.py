@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -77,8 +78,11 @@ def main() -> None:
             for item in result["criteria"]
         ]
     reward = result.get("reward")
-    if isinstance(reward, bool) or not isinstance(reward, (int, float)) or not 0 <= float(reward) <= 1:
-        raise RuntimeError("Cowork Judge reward 必须位于 [0,1]")
+    if isinstance(reward, bool) or not isinstance(reward, (int, float)) or not math.isfinite(float(reward)):
+        raise RuntimeError("Cowork Judge reward 必须是有限数值")
+    # CoworkBench 的部分 deterministic judge 用负数表示失败惩罚；统一协议以 0
+    # 表示最低奖励，详细扣分原因仍保留在 criterion_results 和原始 Judge 日志中。
+    result["reward"] = min(1.0, max(0.0, float(reward)))
     if result.get("task_id") and not str(result["task_id"]).endswith(args.expected_id):
         raise RuntimeError("Cowork Judge task_id 与任务不一致")
     output = Path(args.output)
