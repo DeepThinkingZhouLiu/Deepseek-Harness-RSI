@@ -180,12 +180,13 @@ test('root host can create the same boundary without a user namespace', () => {
     uid: 0,
     gid: 0,
     privilegedHost: true,
+    network: 'shared',
     mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
   })
   assert.equal(result.command, '/usr/bin/bwrap')
   assert.equal(result.args.includes('--unshare-user'), false)
   assert.equal(includesSequence(result.args, ['--cap-drop', 'ALL']), true)
-  assert.equal(result.args.includes('--unshare-net'), true)
+  assert.equal(result.args.includes('--unshare-net'), false)
   assert.equal(result.args.includes('--uid'), false)
   assert.throws(() => buildBubblewrapInvocation({
     invocation: { command: '/usr/bin/true', args: [], cwd: '/work', env: {} },
@@ -194,6 +195,22 @@ test('root host can create the same boundary without a user namespace', () => {
     privilegedHost: true,
     mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
   }), /root 宿主/u)
+})
+
+test('root host creates an empty network namespace before Bubblewrap', () => {
+  if (process.getuid?.() !== 0 || process.getgid?.() !== 0) return
+  const result = buildBubblewrapInvocation({
+    invocation: { command: '/usr/bin/true', args: [], cwd: '/work', env: {} },
+    uid: 0,
+    gid: 0,
+    privilegedHost: true,
+    network: 'none',
+    mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
+  })
+  assert.equal(result.command, '/usr/bin/unshare')
+  assert.deepEqual(result.args.slice(0, 2), ['--net', '/usr/bin/bwrap'])
+  assert.equal(result.args.includes('--unshare-net'), false)
+  assert.equal(includesSequence(result.args, ['--cap-drop', 'ALL']), true)
 })
 
 test('generic sandbox 只允许当前宿主身份保留附加组', () => {

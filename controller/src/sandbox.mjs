@@ -199,6 +199,7 @@ export function buildBubblewrapInvocation({
   gid,
   bwrapPath = '/usr/bin/bwrap',
   setprivPath = '/usr/bin/setpriv',
+  unsharePath = '/usr/bin/unshare',
   network = 'none',
   procMode = 'mounted',
   procSelfExecutable,
@@ -219,6 +220,7 @@ export function buildBubblewrapInvocation({
   }
   const bwrap = absolutePath(bwrapPath, 'bwrapPath')
   const setpriv = absolutePath(setprivPath, 'setprivPath')
+  const unshare = absolutePath(unsharePath, 'unsharePath')
   if (typeof preserveSupplementaryGroups !== 'boolean') {
     throw new ProtocolError('preserveSupplementaryGroups 必须是布尔值')
   }
@@ -259,7 +261,7 @@ export function buildBubblewrapInvocation({
     '--unshare-ipc',
     '--unshare-uts',
     '--unshare-cgroup',
-    ...(network === 'none' ? ['--unshare-net'] : []),
+    ...(network === 'none' && !privilegedHost ? ['--unshare-net'] : []),
     ...(privilegedHost ? [] : [
       '--uid', guestIdentity === 'host' ? String(userId) : '0',
       '--gid', guestIdentity === 'host' ? String(groupId) : '0',
@@ -300,9 +302,11 @@ export function buildBubblewrapInvocation({
     ...rewritten.args,
   ]
 
+  const privilegedNetworkBoundary = privilegedHost && network === 'none'
   return {
-    command: privilegedHost ? bwrap : setpriv,
-    args: privilegedHost ? bwrapArguments : [
+    command: privilegedNetworkBoundary ? unshare : privilegedHost ? bwrap : setpriv,
+    args: privilegedNetworkBoundary ? ['--net', bwrap, ...bwrapArguments]
+      : privilegedHost ? bwrapArguments : [
       `--reuid=${userId}`,
       `--regid=${groupId}`,
       preserveSupplementaryGroups ? '--keep-groups' : '--clear-groups',

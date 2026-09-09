@@ -123,8 +123,10 @@ test('updater supports a root-owned Bubblewrap namespace without changing normal
     uid: 0,
     gid: 0,
     privilegedHost: true,
+    gatewaySocketPath: '/srv/updater-run/model-gateway.sock',
   })
-  assert.equal(invocation.command, '/usr/bin/bwrap')
+  assert.equal(invocation.command, '/usr/bin/unshare')
+  assert.deepEqual(invocation.args.slice(0, 2), ['--net', '/usr/bin/bwrap'])
   assert.equal(invocation.args.includes('--unshare-user'), false)
   assert.equal(includesSequence(invocation.args, ['--cap-drop', 'ALL']), true)
 })
