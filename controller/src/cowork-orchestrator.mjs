@@ -51,6 +51,8 @@ import {
 import {
   ProtocolError,
   readJsonFile,
+  readResultFile,
+  validateResultRecords,
   writeJsonFile,
 } from './protocol.mjs'
 import { runProcess, secretValuesFromEnvironment } from './process.mjs'
@@ -316,6 +318,20 @@ function publicDecision(decision) {
 
 function resultPath(runRoot, generation, candidateId, partition) {
   return join(runRoot, 'results', `generation-${generation}`, `${candidateId}-${partition}.jsonl`)
+}
+
+async function loadCompletedPartition({ path, benchmark, partition, seeds, label }) {
+  const records = validateResultRecords(await readResultFile(path), benchmark, label)
+  const expectedIds = benchmark.partitions[partition].instanceIds
+  if (records.size !== expectedIds.length || expectedIds.some((instanceId) => !records.has(instanceId))) {
+    throw new ProtocolError(`${label} 缺少完整的 ${partition} 结果`)
+  }
+  for (const record of records.values()) {
+    if (JSON.stringify(record.trialSeeds) !== JSON.stringify(seeds)) {
+      throw new ProtocolError(`${label} 的 Trial Seed 与冻结配置不一致`)
+    }
+  }
+  return records
 }
 
 async function appendRegistry(repositoryRoot, record) {
@@ -3543,15 +3559,24 @@ async function finalizeCoworkRun({
 
   try {
     await writeJsonFile(join(runRoot, 'state.json'), state)
-    const baselineFeedbackRecords = await environment.runCandidatePartition({
-      candidateId: baselineId,
-      candidateDigest: h0State.digest,
-      candidateWorkspace: h0Workspace,
-      model: context.bundle.experiment.models.solver,
-      partition: 'feedback',
-      seeds: state.spec.seeds,
-      outputPath: resultPath(runRoot, 1, baselineId, 'feedback'),
-    })
+    const evolvedBaselineFeedbackPath = resultPath(runRoot, 1, baselineId, 'feedback')
+    const baselineFeedbackRecords = await pathExists(evolvedBaselineFeedbackPath)
+      ? loadCompletedPartition({
+          path: evolvedBaselineFeedbackPath,
+          benchmark: context.bundle.benchmark,
+          partition: 'feedback',
+          seeds: state.spec.seeds,
+          label: `${baselineId}/feedback/evolution`,
+        })
+      : environment.runCandidatePartition({
+          candidateId: baselineId,
+          candidateDigest: h0State.digest,
+          candidateWorkspace: h0Workspace,
+          model: context.bundle.experiment.models.solver,
+          partition: 'feedback',
+          seeds: state.spec.seeds,
+          outputPath: resultPath(runRoot, generation, baselineId, `feedback-final-${finalAttemptId}`),
+        })
     const candidateFeedbackRecords = championId === baselineId
       ? baselineFeedbackRecords
       : await environment.runCandidatePartition({
