@@ -3590,14 +3590,14 @@ async function finalizeCoworkRun({
     await writeJsonFile(join(runRoot, 'state.json'), state)
     const evolvedBaselineFeedbackPath = resultPath(runRoot, 1, baselineId, 'feedback')
     const baselineFeedbackRecords = await pathExists(evolvedBaselineFeedbackPath)
-      ? loadCompletedPartition({
+      ? await loadCompletedPartition({
           path: evolvedBaselineFeedbackPath,
           benchmark: context.bundle.benchmark,
           partition: 'feedback',
           seeds: state.spec.seeds,
           label: `${baselineId}/feedback/evolution`,
         })
-      : environment.runCandidatePartition({
+      : await environment.runCandidatePartition({
           candidateId: baselineId,
           candidateDigest: h0State.digest,
           candidateWorkspace: h0Workspace,
@@ -3612,7 +3612,7 @@ async function finalizeCoworkRun({
     const candidateFeedbackRecords = championId === baselineId
       ? baselineFeedbackRecords
       : await pathExists(candidateFeedbackPath)
-        ? loadCompletedPartition({
+        ? await loadCompletedPartition({
             path: candidateFeedbackPath,
             benchmark: context.bundle.benchmark,
             partition: 'feedback',
