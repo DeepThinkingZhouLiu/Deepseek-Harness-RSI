@@ -139,6 +139,7 @@ export async function createBaselineRuntime({
   release,
   repositoryRoot,
   runRoot,
+  resumeH0 = false,
   onEvent = () => {},
 }) {
   const { config, target, updater, provider, infrastructure, prompts } = bundle
@@ -383,22 +384,37 @@ export async function createBaselineRuntime({
     async initialize() {
       await runtime.preflight()
       const workspace = join(runRoot, 'candidates/h0/workspace')
-      await mkdir(join(runRoot, 'candidates/h0'), { recursive: true })
-      await materializeCandidate({
-        repositoryRoot,
-        target,
-        sourceRoot: source.root,
-        destination: workspace,
-      })
+      if (resumeH0) {
+        const identity = JSON.parse(await readFile(join(runRoot, 'identity.json'), 'utf8'))
+        if (identity.release !== release.id || identity.sourceRevision !== source.revision
+            || identity.h0?.id !== 'h0') {
+          throw new ProtocolError('Baseline H0 resume identity differs from the original run')
+        }
+      } else {
+        await mkdir(join(runRoot, 'candidates/h0'), { recursive: true })
+        await materializeCandidate({
+          repositoryRoot,
+          target,
+          sourceRoot: source.root,
+          destination: workspace,
+        })
+      }
       h0 = await snapshot('h0', workspace)
       await assertCandidate(h0)
       h0Prompt = await readFile(join(workspace, 'profiles/cowork.md'), 'utf8')
-      await writeJsonFile(join(runRoot, 'identity.json'), {
-        experiment: config,
-        release: release.id,
-        sourceRevision: source.revision,
-        h0,
-      })
+      if (resumeH0) {
+        const identity = JSON.parse(await readFile(join(runRoot, 'identity.json'), 'utf8'))
+        if (identity.h0.digest !== h0.digest) {
+          throw new ProtocolError('Baseline H0 workspace changed before resume')
+        }
+      } else {
+        await writeJsonFile(join(runRoot, 'identity.json'), {
+          experiment: config,
+          release: release.id,
+          sourceRevision: source.revision,
+          h0,
+        })
+      }
       return h0
     },
 

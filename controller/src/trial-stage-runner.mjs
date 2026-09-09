@@ -27,7 +27,7 @@ export function retryableTrialError(error) {
   if (/HTTP\s+(?:400|401|403|404|413|422)\b|ModuleNotFoundError|SyntaxError|PermissionError/iu.test(text)) return false
   return error?.processResult?.timedOut === true
     || /model gateway transient response failure|model gateway returned retryable HTTP|HTTP\s+(?:429|500|502|503|504)\b|ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|connection reset|timed out/iu.test(text)
-    || /AgentBay env upload failed: Upload exception|SSL:\s*UNEXPECTED_EOF_WHILE_READING/iu.test(text)
+    || /AgentBay env upload failed: Upload exception|AgentBay output transfer failed|AgentBay bridge downloadDir 失败|SSL:\s*UNEXPECTED_EOF_WHILE_READING/iu.test(text)
     || /no final content.*finish_reason=(?:stop|missing|tool_calls|length)/su.test(text)
 }
 

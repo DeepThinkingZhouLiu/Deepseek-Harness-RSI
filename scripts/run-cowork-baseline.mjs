@@ -106,6 +106,7 @@ if (command === 'check') {
     release,
     repositoryRoot: REPOSITORY_ROOT,
     runRoot,
+    resumeH0: command === 'run' && values['resume-h0'] === true,
     onEvent: (message) => console.log(message),
   })
   try {
