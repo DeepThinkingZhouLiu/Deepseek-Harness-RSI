@@ -3587,17 +3587,28 @@ async function finalizeCoworkRun({
           seeds: state.spec.seeds,
           outputPath: resultPath(runRoot, generation, baselineId, `feedback-final-${finalAttemptId}`),
         })
+    const candidateFeedbackPath = resultPath(
+      runRoot, generation, championId, `feedback-final-${finalAttemptId}`,
+    )
     const candidateFeedbackRecords = championId === baselineId
       ? baselineFeedbackRecords
-      : await environment.runCandidatePartition({
-          candidateId: championId,
-          candidateDigest: championState.digest,
-          candidateWorkspace: championWorkspace,
-          model: context.bundle.experiment.models.solver,
-          partition: 'feedback',
-          seeds: state.spec.seeds,
-          outputPath: resultPath(runRoot, generation, championId, `feedback-final-${finalAttemptId}`),
-        })
+      : await pathExists(candidateFeedbackPath)
+        ? loadCompletedPartition({
+            path: candidateFeedbackPath,
+            benchmark: context.bundle.benchmark,
+            partition: 'feedback',
+            seeds: state.spec.seeds,
+            label: `${championId}/feedback/final`,
+          })
+        : await environment.runCandidatePartition({
+            candidateId: championId,
+            candidateDigest: championState.digest,
+            candidateWorkspace: championWorkspace,
+            model: context.bundle.experiment.models.solver,
+            partition: 'feedback',
+            seeds: state.spec.seeds,
+            outputPath: candidateFeedbackPath,
+          })
     onEvent({ stage: 'final-feedback', message: 'H0 与锁定 Champion 已完成 Feedback 回放' })
     const [baselineRecords, candidateRecords] = await Promise.all([
       environment.runCandidatePartition({
