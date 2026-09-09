@@ -57,6 +57,11 @@ export async function loadBaselineConfiguration(path, repositoryRoot) {
       throw new ProtocolError(`Invalid baseline ${key}`)
     }
   }
+  if (config.maximumConcurrentTrials !== undefined
+      && (!Number.isSafeInteger(config.maximumConcurrentTrials)
+        || config.maximumConcurrentTrials < 1)) {
+    throw new ProtocolError('Invalid baseline maximumConcurrentTrials')
+  }
   const readAdapter = (name) => readConfigFile(resolveInside(
     repositoryRoot,
     config.adapters[name],
@@ -191,9 +196,14 @@ export async function createBaselineRuntime({
     return remaining
   }
   const checkBudget = async () => remainingTime()
+  const baselineEnvironment = structuredClone(infrastructure)
+  baselineEnvironment.task.maximumConcurrentTrials = Math.min(
+    infrastructure.task.maximumConcurrentTrials,
+    config.maximumConcurrentTrials ?? infrastructure.task.maximumConcurrentTrials,
+  )
   const environment = new BaselineCoworkEnvironment({
     release,
-    environment: infrastructure,
+    environment: baselineEnvironment,
     repositoryRoot,
     runRoot,
     docker,
@@ -612,11 +622,13 @@ export async function createBaselineRuntime({
         ? [frozen.h0]
         : [frozen.h0, frozen.champion]
       environment.authorizeFinal(candidates)
-      return Object.fromEntries(await Promise.all(candidates.map(async (candidate) => {
+      const results = []
+      for (const candidate of candidates) {
         await assertCandidate(candidate)
         const records = await environment.runPartition(candidate, 'final')
-        return [candidate.id, records]
-      })))
+        results.push([candidate.id, records])
+      }
+      return Object.fromEntries(results)
   }
   return runtime
 }

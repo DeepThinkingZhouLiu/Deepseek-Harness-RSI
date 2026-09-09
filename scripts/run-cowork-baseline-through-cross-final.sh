@@ -40,9 +40,8 @@ if [[ ! -f "$run_root/final-report.json" ]]; then
   "${runner[@]}" final --experiment "$source_config" --run-id "$run_id"
 fi
 
-# Each target gets a separate AgentBay session and checkpointed partition runner.
+# Cross targets run sequentially so two baseline pipelines retain a bounded B4 load.
 unset HARNESS_RSI_AGENTBAY_EXISTING_SESSION_ID
-cross_pids=()
 for target_config in "${cross_targets[@]}"; do
   target_name="$(basename "$target_config" .json | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9._-' '-')"
   cross_run_id="${run_id}-to-${target_name}"
@@ -52,12 +51,5 @@ for target_config in "${cross_targets[@]}"; do
   "${runner[@]}" cross-final \
     --experiment "$target_config" \
     --source-run-id "$run_id" \
-    --run-id "$cross_run_id" &
-  cross_pids+=("$!")
+    --run-id "$cross_run_id"
 done
-
-cross_status=0
-for cross_pid in "${cross_pids[@]}"; do
-  wait "$cross_pid" || cross_status=1
-done
-exit "$cross_status"

@@ -5,6 +5,7 @@
   "policy": "evaluation/policies/cowork-bench-full-rsi.json",
   "benchmark": "benchmarks/cowork-bench-ppt60/benchmark.json",
   "candidateBudget": 4,
+  "maximumConcurrentTrials": 4,
   "seed": 20260907,
   "maximumReflectionRounds": 3,
   "maximumUpdaterRequests": 1024,
@@ -17,7 +18,7 @@
     "infrastructure": "environments/cowork-bench-agentbay.yml"
   },
   "models": {
-    "solver": { "provider": "zcloud-openai", "model": "gpt-5.6-terra", "maxTokens": 32768, "reasoningEffort": "high" },
-    "updater": { "provider": "zcloud-openai", "model": "gpt-5.6-terra", "maxTokens": 32768, "reasoningEffort": "high" }
+    "solver": { "provider": "zcloud-openai", "model": "gpt-5.6-terra", "maxTokens": 65536, "reasoningEffort": "high" },
+    "updater": { "provider": "zcloud-openai", "model": "gpt-5.6-terra", "maxTokens": 65536, "reasoningEffort": "high" }
   }
 }
