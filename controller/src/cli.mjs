@@ -37,7 +37,7 @@ const HELP = `HarnessEvoGym Controller
   harness-rsi experiment baseline-pack-export --run <run> --output <pack.json> --id <id> [--branch <branch-id>]
   harness-rsi experiment run --config <experiment.json> [--run-id <id>]
   harness-rsi experiment resume --run <population-run> [--upgrade-controller] [--recover-interrupted]
-  harness-rsi experiment finalize --run <single-run | population-run> [--recover-infrastructure]
+  harness-rsi experiment finalize --run <single-run | population-run> [--recover-infrastructure | --resume-final]
   harness-rsi benchmark validate --config <benchmark.json> [--output <report.json>]
   harness-rsi evaluate compare \\
     --benchmark <benchmark.json> \\
@@ -71,6 +71,7 @@ const HELP = `HarnessEvoGym Controller
   - experiment resume 只恢复同一 Controller Revision 下暂停或处于稳定 Wave 边界的 Cowork Population。
   - experiment finalize 是唯一允许解锁 Cowork sealed final 的入口。
   - --recover-infrastructure 只能在 Population 上次失败且从未访问 sealed final 时使用，并且只能恢复一次。
+  - --resume-final 继续同一个已领取的 Final Attempt，并复用已提交的 Trial Checkpoint。
   - Provider 密钥只从运行时环境变量读取，不写入 Experiment 或 .rsi 产物。
 `
 
@@ -276,12 +277,16 @@ async function evolveResumeCommand(args) {
 async function evolveFinalizeCommand(args) {
   const { options, flags } = parseOptions(args, {
     valueOptions: new Set(['run', 'output']),
-    booleanFlags: new Set(['recover-infrastructure']),
+    booleanFlags: new Set(['recover-infrastructure', 'resume-final']),
   })
+  if (flags.has('recover-infrastructure') && flags.has('resume-final')) {
+    throw new ProtocolError('--recover-infrastructure 与 --resume-final 不能同时使用')
+  }
   const result = await finalizeEvolution({
     repositoryRoot: REPOSITORY_ROOT,
     runDirectory: requiredPath(options, 'run'),
     recoverInfrastructure: flags.has('recover-infrastructure'),
+    resumeFinal: flags.has('resume-final'),
     onEvent: progress,
   })
   await emit({
