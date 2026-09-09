@@ -851,9 +851,9 @@ export function createModelGateway(options) {
       }
       if (unix && ((socketUid === undefined) !== (socketGid === undefined)
           || (socketUid !== undefined
-            && (!Number.isInteger(socketUid) || socketUid < 1
-              || !Number.isInteger(socketGid) || socketGid < 1)))) {
-        throw new TypeError('Unix model gateway socket uid/gid must be positive integers')
+            && (!Number.isInteger(socketUid) || socketUid < 0
+              || !Number.isInteger(socketGid) || socketGid < 0)))) {
+        throw new TypeError('Unix model gateway socket uid/gid must be non-negative integers')
       }
       if (server.listening) throw new Error('model gateway is already listening')
       await new Promise((resolve, reject) => {

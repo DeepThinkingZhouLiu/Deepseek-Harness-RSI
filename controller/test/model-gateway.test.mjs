@@ -127,6 +127,25 @@ test('Unix socket transport exposes only a synthetic loopback URL', async (t) =>
   assert.equal(response.body.includes('unused-real-key'), false)
 })
 
+test('Unix socket transport accepts root ownership for a privileged host updater', async (t) => {
+  if (process.getuid?.() !== 0 || process.getgid?.() !== 0) return
+  const root = await mkdtemp(join(tmpdir(), 'model-gateway-root-unix-'))
+  const socketPath = join(root, 'gateway.sock')
+  const gateway = await startModelGateway({
+    upstreamBaseUrl: 'https://provider.invalid/v1',
+    getApiKey: async () => 'unused-real-key',
+    socketPath,
+    publicUrl: 'http://127.0.0.1:43119/v1',
+    socketUid: 0,
+    socketGid: 0,
+  })
+  t.after(async () => {
+    await gateway.close()
+    await rm(root, { recursive: true, force: true })
+  })
+  assert.equal(gateway.socketPath, socketPath)
+})
+
 test('Anthropic Unix socket exposes relay origin for SDK-owned /v1 path', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'model-gateway-anthropic-unix-'))
   const socketPath = join(root, 'gateway.sock')
