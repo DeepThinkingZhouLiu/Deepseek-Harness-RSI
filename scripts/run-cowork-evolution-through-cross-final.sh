@@ -51,7 +51,7 @@ if [[ "$final_evaluated" != "true" ]]; then
   fi
 fi
 
-# 每个目标格式独占一个新 AgentBay session。H0/Champion 合计并发 30；
+# 每个目标格式独占一个新 AgentBay session。H0/Champion 合计并发 8；
 # 目标格式串行，避免同一个模型 Provider key 被多个 session 同时打满。
 unset HARNESS_RSI_AGENTBAY_EXISTING_SESSION_ID
 for target_config in "${cross_targets[@]}"; do

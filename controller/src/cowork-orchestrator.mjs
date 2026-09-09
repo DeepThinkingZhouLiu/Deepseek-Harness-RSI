@@ -3925,7 +3925,7 @@ export async function runCrossFinalEvaluation({
     const crossEnvironment = structuredClone(context.bundle.environment)
     crossEnvironment.task.maximumConcurrentTrials = Math.min(
       crossEnvironment.task.maximumConcurrentTrials ?? 1,
-      15,
+      4,
     )
     const environment = createEnvironmentRunner({
       repositoryRoot,
