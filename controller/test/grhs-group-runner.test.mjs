@@ -109,6 +109,42 @@ test('GRHS 执行四个 sibling，Selection 只在完整组完成后返回 Winne
   assert.equal((await stat(checkpointPath)).mode & 0o777, 0o400)
 })
 
+test('GRHS 并行执行全部 Updater，再并行执行全部 Selection', async () => {
+  const groupRoot = await mkdtemp(join(tmpdir(), 'grhs-group-parallel-'))
+  let updaterStarted = 0
+  let selectionStarted = 0
+  let releaseUpdaters
+  let releaseSelections
+  const updaterBarrier = new Promise((resolve) => { releaseUpdaters = resolve })
+  const selectionBarrier = new Promise((resolve) => { releaseSelections = resolve })
+  const result = await executeGrhsGroup({
+    strategy: strategy(),
+    strategyContext: context(),
+    previousStrategyState: null,
+    groupRoot,
+    async prepareSharedEvidence() {
+      return { feedbackPacket: { candidateId: 'h0' }, baselineRecords: [] }
+    },
+    async prepareSibling(member) {
+      updaterStarted += 1
+      if (updaterStarted === 4) releaseUpdaters()
+      await updaterBarrier
+      assert.equal(selectionStarted, 0)
+      return { member }
+    },
+    async evaluateSibling(member) {
+      selectionStarted += 1
+      if (selectionStarted === 4) releaseSelections()
+      await selectionBarrier
+      return siblingResult(member)
+    },
+    async verifyCompletedSibling() {},
+  })
+  assert.equal(updaterStarted, 4)
+  assert.equal(selectionStarted, 4)
+  assert.equal(result.candidates.length, 4)
+})
+
 test('GRHS 中断恢复时复用已完成 sibling，只重跑未提交 sibling', async () => {
   const groupRoot = await mkdtemp(join(tmpdir(), 'grhs-group-resume-'))
   let firstRunCalls = 0
@@ -123,14 +159,14 @@ test('GRHS 中断恢复时复用已完成 sibling，只重跑未提交 sibling',
       },
       async runSibling(member) {
         firstRunCalls += 1
-        if (firstRunCalls === 3) throw new Error('模拟中断')
+        if (member.candidateId === 'g001-grhs-s003-l3') throw new Error('模拟中断')
         return siblingResult(member)
       },
       async verifyCompletedSibling() {},
     }),
     /模拟中断/u,
   )
-  assert.equal(firstRunCalls, 3)
+  assert.equal(firstRunCalls, 4)
 
   const reused = []
   const rerun = []
@@ -150,7 +186,11 @@ test('GRHS 中断恢复时复用已完成 sibling，只重跑未提交 sibling',
       reused.push(resultValue.id)
     },
   })
-  assert.deepEqual(reused, ['g001-grhs-s001-l3', 'g001-grhs-s002-l3'])
-  assert.deepEqual(rerun, ['g001-grhs-s003-l3', 'g001-grhs-s004-l3'])
+  assert.deepEqual(reused, [
+    'g001-grhs-s001-l3',
+    'g001-grhs-s002-l3',
+    'g001-grhs-s004-l3',
+  ])
+  assert.deepEqual(rerun, ['g001-grhs-s003-l3'])
   assert.equal(result.candidates.length, 4)
 })

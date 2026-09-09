@@ -2016,7 +2016,7 @@ export function createCoworkBranchEvolutionDriver({
         }
         materializedCandidates.set(candidateId, proposal)
       },
-      async runSibling({ candidateId, plan, shared, groupContext }) {
+      async prepareSibling({ candidateId, plan, shared, groupContext }) {
         const lease = leaseFor(plan)
         let proposal
         try {
@@ -2030,15 +2030,20 @@ export function createCoworkBranchEvolutionDriver({
           } else onEvent({ stage: 'update-reuse', generation, message: '复用 GRHS Patch：' + candidateId })
         } catch (error) {
           if (!(error instanceof CandidateMutationError)) throw error
-          return {
+          return { result: {
             id: candidateId, parentId: parent.id, digest: null,
             mutationPlanId: plan.metadata.id, regionIds: plan.spec.regionIds,
             valid: false, promotionEligible: false, qualityDelta: null,
             evaluation: null, baselineEvaluation: null, decision: null,
             rejection: { stage: 'update-and-diff', message: error.message, details: error.details ?? [] },
-          }
+          } }
         }
         materializedCandidates.set(candidateId, proposal)
+        return { proposal }
+      },
+      async evaluateSibling({ candidateId, plan, shared }, prepared) {
+        if (prepared.result) return prepared.result
+        const { proposal } = prepared
         onEvent({ stage: decisionPartition, generation, message: '评测 GRHS sibling：' + candidateId })
         // 由 Environment 复核按题 Checkpoint 并重建 JSONL，不能把半写入摘要当成完整 Partition。
         const candidateRecords = await runPartition(proposal, decisionPartition)

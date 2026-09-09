@@ -109,6 +109,8 @@ export async function executeGrhsGroup({
   groupRoot,
   prepareSharedEvidence,
   runSibling,
+  prepareSibling = null,
+  evaluateSibling = null,
   verifyCompletedSibling,
   onSiblingCompleted = async () => {},
 }) {
@@ -116,6 +118,13 @@ export async function executeGrhsGroup({
   const groupSize = strategy.groupSize
   if (!Number.isSafeInteger(groupSize) || groupSize < 2 || groupSize > 32) {
     throw new ProtocolError('GRHS groupSize 必须是 2..32 的整数')
+  }
+  const stagedExecution = prepareSibling !== null || evaluateSibling !== null
+  if (stagedExecution && (typeof prepareSibling !== 'function' || typeof evaluateSibling !== 'function')) {
+    throw new ProtocolError('GRHS 分阶段并行必须同时提供 prepareSibling 和 evaluateSibling')
+  }
+  if (!stagedExecution && typeof runSibling !== 'function') {
+    throw new ProtocolError('GRHS 必须提供 runSibling 或分阶段 sibling callbacks')
   }
   const groupId = `generation-${String(generation).padStart(4, '0')}-grhs`
   const identity = digest({
@@ -149,8 +158,7 @@ export async function executeGrhsGroup({
     shared = await prepareSharedEvidence()
     await commitCheckpoint(sharedPath, identity, shared)
   }
-  const candidates = []
-  for (const [index, plan] of plans.entries()) {
+  const entries = plans.map((plan, index) => {
     const candidateId = `g${String(generation).padStart(3, '0')}-grhs-s${String(index + 1).padStart(3, '0')}-${riskCeiling}`
     const member = {
       candidateId, plan, shared: structuredClone(shared),
@@ -160,21 +168,59 @@ export async function executeGrhsGroup({
       },
     }
     const path = join(groupRoot, `sibling-${String(index + 1).padStart(3, '0')}.checkpoint.json`)
-    let result = await readCheckpoint(path, identity)
-    const reused = result !== null
-    if (reused) await verifyCompletedSibling(result, member)
-    else {
-      result = await runSibling(member)
-      await commitCheckpoint(path, identity, result)
-    }
+    return { member, path, result: null, reused: false }
+  })
+  const validateResultIdentity = (result, { candidateId, plan }) => {
     if (result.id !== candidateId || result.parentId !== championId
         || result.mutationPlanId !== plan.metadata.id
         || JSON.stringify(result.regionIds) !== JSON.stringify(plan.spec.regionIds)) {
       throw new ProtocolError('GRHS sibling 结果与预提交计划身份不一致')
     }
-    await onSiblingCompleted(result, { reused })
-    candidates.push(result)
   }
+
+  await Promise.all(entries.map(async (entry) => {
+    entry.result = await readCheckpoint(entry.path, identity)
+    entry.reused = entry.result !== null
+    if (entry.reused) {
+      validateResultIdentity(entry.result, entry.member)
+      await verifyCompletedSibling(entry.result, entry.member)
+    }
+  }))
+
+  const pending = entries.filter((entry) => !entry.reused)
+  let executions
+  if (stagedExecution) {
+    const preparations = await Promise.allSettled(
+      pending.map((entry) => prepareSibling(entry.member)),
+    )
+    const preparationFailure = preparations.find((outcome) => outcome.status === 'rejected')
+    if (preparationFailure) throw preparationFailure.reason
+    executions = pending.map((entry, index) => async () => (
+      await evaluateSibling(entry.member, preparations[index].value)
+    ))
+  } else {
+    executions = pending.map((entry) => async () => await runSibling(entry.member))
+  }
+
+  const outcomes = await Promise.allSettled(executions.map(async (execute, index) => {
+    const result = await execute()
+    const { member, path } = pending[index]
+    validateResultIdentity(result, member)
+    await commitCheckpoint(path, identity, result)
+    return result
+  }))
+  for (const [index, outcome] of outcomes.entries()) {
+    if (outcome.status === 'fulfilled') pending[index].result = outcome.value
+  }
+
+  const candidates = []
+  for (const entry of entries) {
+    if (entry.result === null) continue
+    await onSiblingCompleted(entry.result, { reused: entry.reused })
+    candidates.push(entry.result)
+  }
+  const executionFailure = outcomes.find((outcome) => outcome.status === 'rejected')
+  if (executionFailure) throw executionFailure.reason
   deduplicateGrhsCandidates(candidates)
   const observed = await strategy.observeGroup({
     ...strategyContext,
