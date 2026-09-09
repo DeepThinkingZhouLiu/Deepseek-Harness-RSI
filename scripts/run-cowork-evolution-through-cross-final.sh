@@ -51,6 +51,9 @@ if [[ "$final_evaluated" != "true" ]]; then
   fi
 fi
 
+# 每个目标格式独占一个新 AgentBay session；多个 cross-final 同时运行。
+unset HARNESS_RSI_AGENTBAY_EXISTING_SESSION_ID
+cross_pids=()
 for target_config in "${cross_targets[@]}"; do
   target_name="$(basename "$target_config" .json | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9._-' '-')"
   cross_run_id="${population_id}-to-${target_name}"
@@ -60,5 +63,12 @@ for target_config in "${cross_targets[@]}"; do
   "${cli[@]}" experiment cross-final \
     --source-run "$population_root" \
     --target-config "$target_config" \
-    --run-id "$cross_run_id"
+    --run-id "$cross_run_id" &
+  cross_pids+=("$!")
 done
+
+cross_status=0
+for cross_pid in "${cross_pids[@]}"; do
+  wait "$cross_pid" || cross_status=1
+done
+exit "$cross_status"
