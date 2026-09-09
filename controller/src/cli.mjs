@@ -8,6 +8,7 @@ import {
   buildExperimentRuntime,
   finalizeEvolution,
   preflightExperiment,
+  runCrossFinalEvaluation,
   resumePopulationEvolution,
   runConfiguredBaseline,
   runConfiguredEvolution,
@@ -38,6 +39,7 @@ const HELP = `HarnessEvoGym Controller
   harness-rsi experiment run --config <experiment.json> [--run-id <id>]
   harness-rsi experiment resume --run <population-run> [--upgrade-controller] [--recover-interrupted]
   harness-rsi experiment finalize --run <single-run | population-run> [--recover-infrastructure | --resume-final]
+  harness-rsi experiment cross-final --source-run <population-run> --target-config <experiment.json> --run-id <id>
   harness-rsi benchmark validate --config <benchmark.json> [--output <report.json>]
   harness-rsi evaluate compare \\
     --benchmark <benchmark.json> \\
@@ -70,6 +72,7 @@ const HELP = `HarnessEvoGym Controller
   - experiment baseline-pack-export 从已有 Run 固化 H0 Selection 与第一轮 Feedback，不读取 final。
   - experiment resume 只恢复同一 Controller Revision 下暂停或处于稳定 Wave 边界的 Cowork Population。
   - experiment finalize 是唯一允许解锁 Cowork sealed final 的入口。
+  - experiment cross-final 将源格式锁定的 Champion 与 H0 配对评测到目标格式 sealed final；同一命令可续跑。
   - --recover-infrastructure 只能在 Population 上次失败且从未访问 sealed final 时使用，并且只能恢复一次。
   - --resume-final 继续同一个已领取的 Final Attempt，并复用已提交的 Trial Checkpoint。
   - Provider 密钥只从运行时环境变量读取，不写入 Experiment 或 .rsi 产物。
@@ -298,6 +301,28 @@ async function evolveFinalizeCommand(args) {
   }, options.get('output'))
 }
 
+async function crossFinalCommand(args) {
+  const { options } = parseOptions(args, {
+    valueOptions: new Set(['source-run', 'target-config', 'run-id', 'output']),
+  })
+  const result = await runCrossFinalEvaluation({
+    repositoryRoot: REPOSITORY_ROOT,
+    sourceRunDirectory: requiredPath(options, 'source-run'),
+    targetExperimentPath: requiredPath(options, 'target-config'),
+    runId: requiredValue(options, 'run-id'),
+    onEvent: progress,
+  })
+  await emit({
+    apiVersion: 'harness-rsi/v1alpha1',
+    kind: 'CrossFinalEvaluationRunReport',
+    runId: result.runId,
+    runRoot: result.runRoot,
+    reportPath: result.reportPath,
+    summaryPath: result.summaryPath,
+    metrics: result.report.partitions.final,
+  }, options.get('output'))
+}
+
 async function validateBenchmarkCommand(args) {
   const { options } = parseOptions(args, {
     valueOptions: new Set(['config', 'output']),
@@ -400,6 +425,7 @@ async function main() {
   if (group === 'experiment' && action === 'run') return await evolveRunCommand(args)
   if (group === 'experiment' && action === 'resume') return await evolveResumeCommand(args)
   if (group === 'experiment' && action === 'finalize') return await evolveFinalizeCommand(args)
+  if (group === 'experiment' && action === 'cross-final') return await crossFinalCommand(args)
   if (group === 'runtime' && action === 'build') return await buildRuntimeCommand(args)
   if (group === 'benchmark' && action === 'validate') return await validateBenchmarkCommand(args)
   if (group === 'evaluate' && action === 'compare') return await compareCommand(args)

@@ -3776,3 +3776,273 @@ export async function finalizeEvolution({
   const state = await readJsonFile(join(runRoot, 'state.json'))
   return await finalizeCoworkRun({ repositoryRoot, runRoot, state, onEvent })
 }
+
+function crossFinalSummaryMarkdown({ sourceCampaignId, championId, targetBenchmarkId, report }) {
+  const final = report.partitions.final
+  const percent = (value) => `${(value * 100).toFixed(1)}%`
+  return `# Cross-final evaluation
+
+Source campaign: \`${sourceCampaignId}\`<br>
+Champion: \`${championId}\`<br>
+Target benchmark: \`${targetBenchmarkId}\`
+
+| Metric | H0 | Champion | Delta |
+|---|---:|---:|---:|
+| Resolved | ${final.baseline.resolved}/${final.baseline.total} | ${final.candidate.resolved}/${final.candidate.total} | ${final.paired.netResolved >= 0 ? '+' : ''}${final.paired.netResolved} |
+| Resolved rate | ${percent(final.baseline.resolvedRate)} | ${percent(final.candidate.resolvedRate)} | ${final.paired.deltaResolvedRate >= 0 ? '+' : ''}${percent(final.paired.deltaResolvedRate)} |
+| Mean reward | ${final.baseline.meanReward.toFixed(6)} | ${final.candidate.meanReward.toFixed(6)} | ${final.paired.deltaMeanReward >= 0 ? '+' : ''}${final.paired.deltaMeanReward.toFixed(6)} |
+| Reward-improved tasks | - | ${final.paired.rewardImproved} | - |
+| Reward-regressed tasks | - | ${final.paired.rewardRegressed} | - |
+| Reward-unchanged tasks | - | ${final.paired.rewardUnchanged} | - |
+
+The H0 and Champion results are paired on the same target-final tasks and trial seeds.
+`
+}
+
+function assertCrossFinalIdentity(existing, expected) {
+  for (const field of [
+    'runId',
+    'sourceCampaignId',
+    'sourceBranchId',
+    'baselineId',
+    'championId',
+    'targetExperimentPath',
+    'targetExperimentId',
+    'targetBenchmarkId',
+  ]) {
+    if (existing[field] !== expected[field]) {
+      throw new ProtocolError(`Cross-final Run 与本次请求不一致：${field}`)
+    }
+  }
+}
+
+export async function runCrossFinalEvaluation({
+  repositoryRoot,
+  sourceRunDirectory,
+  targetExperimentPath,
+  runId,
+  onEvent = () => {},
+}) {
+  safeRunId(runId)
+  const populationRoot = await realpath(resolve(sourceRunDirectory))
+  assertInside(resolve(repositoryRoot, '.rsi/runs'), populationRoot, 'Source Population Run')
+  const populationState = await readJsonFile(join(populationRoot, 'public', 'state.json'))
+  if (populationState?.kind !== 'PopulationCampaignState'
+      || !['CLOSED', 'REPORTED'].includes(populationState.status)) {
+    throw new ProtocolError('Cross-final 只接受已经完成进化的 Population Run')
+  }
+  if (populationState.final?.evaluated !== true) {
+    throw new ProtocolError('请先完成源格式的 in-domain Final，再执行 cross-final')
+  }
+  const sourceBranchId = populationState.best?.branchId
+  if (typeof sourceBranchId !== 'string' || !/^branch-[0-9]{3}$/u.test(sourceBranchId)) {
+    throw new ProtocolError('Source Population 缺少合法的 Best Branch')
+  }
+  const championId = safeCandidateId(populationState.best?.candidateId)
+  const branchRoot = await realpath(join(populationRoot, 'branches', sourceBranchId, 'run'))
+  assertInside(populationRoot, branchRoot, 'Source Best Branch')
+  const branchState = assertEvolutionRunState(await readJsonFile(join(branchRoot, 'state.json')))
+  const baselineId = safeCandidateId(branchState.spec.baselineId)
+  if (branchState.spec.championId !== championId) {
+    throw new ProtocolError('Source Population 与 Best Branch 的 Champion 不一致')
+  }
+  if (championId === baselineId) {
+    throw new ProtocolError('Source Population 没有生成优于 H0 的 Champion，跳过 cross-final')
+  }
+
+  const absoluteTargetExperimentPath = resolve(targetExperimentPath)
+  assertInside(repositoryRoot, absoluteTargetExperimentPath, 'Cross-final Target Experiment')
+  const context = await createContext({
+    repositoryRoot,
+    experimentPath: absoluteTargetExperimentPath,
+    runRootOverride: null,
+    gatewayScope: runId,
+  })
+  context.repositoryRoot = repositoryRoot
+  context.runId = runId
+  const relativeTargetExperimentPath = relative(repositoryRoot, absoluteTargetExperimentPath).replaceAll('\\', '/')
+  const identity = {
+    runId,
+    sourceCampaignId: populationState.campaignId,
+    sourceBranchId,
+    baselineId,
+    championId,
+    targetExperimentPath: relativeTargetExperimentPath,
+    targetExperimentId: context.bundle.experiment.id,
+    targetBenchmarkId: context.bundle.benchmark.id,
+  }
+  const crossRoot = join(populationRoot, 'cross-final', runId)
+  const statePath = join(crossRoot, 'state.json')
+  const reportPath = join(crossRoot, 'report', 'final-evaluation.json')
+  const summaryPath = join(crossRoot, 'report', 'summary.md')
+  await mkdir(crossRoot, { recursive: true, mode: 0o700 })
+  const release = await acquireCampaignLock({
+    campaignsRoot: join(populationRoot, 'cross-final'),
+    campaignId: runId,
+    command: 'cross-final',
+  })
+  let state
+  try {
+    if (await pathExists(statePath)) {
+      state = await readJsonFile(statePath)
+      assertCrossFinalIdentity(state.spec ?? {}, identity)
+      if (state.status === 'completed') {
+        return { runId, runRoot: crossRoot, reportPath, summaryPath, report: await readJsonFile(reportPath) }
+      }
+    } else {
+      state = {
+        apiVersion: 'harness-rsi/v1alpha1',
+        kind: 'CrossFinalRunState',
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        spec: identity,
+      }
+      await writeJsonFile(statePath, state)
+    }
+
+    assertSecrets([...new Set([
+      ...context.bundle.target.solver.runtime.secretEnvironment,
+      context.bundle.providers.solver.credentials.apiKeyEnvironment,
+      context.bundle.providers.solver.credentials.baseUrlEnvironment,
+    ])])
+    validateModelGatewayEnvironment(context.bundle.environment.modelGateway)
+    const sourceSnapshot = await readJsonFile(join(branchRoot, 'experiment.snapshot.json'))
+    if (sourceSnapshot.benchmark.id === context.bundle.benchmark.id) {
+      throw new ProtocolError('Cross-final 的目标格式必须与源进化格式不同')
+    }
+    if (JSON.stringify(sourceSnapshot.experiment.models.solver)
+        !== JSON.stringify(context.bundle.experiment.models.solver)) {
+      throw new ProtocolError('Cross-final 的 Solver Model 与源进化 Run 不一致')
+    }
+    if (JSON.stringify(sourceSnapshot.target) !== JSON.stringify(context.bundle.target)) {
+      throw new ProtocolError('Cross-final 的 Target Adapter 与源进化 Run 不一致')
+    }
+    if (context.targetSourceRevision !== branchState.spec.targetSourceRevision) {
+      throw new ProtocolError('Cross-final 的 Target Source Revision 与源进化 Run 不一致')
+    }
+
+    context.runRoot = crossRoot
+    const environment = createEnvironmentRunner({
+      repositoryRoot,
+      environment: context.bundle.environment,
+      benchmark: context.bundle.benchmark,
+      target: context.bundle.target,
+      solverDriver: context.solverDriver,
+      docker: context.docker,
+      runRoot: crossRoot,
+    })
+    environment.allowRuntimeRecovery = true
+    onEvent({ stage: 'cross-final-preflight', message: `${championId} -> ${context.bundle.benchmark.id}` })
+    const environmentStatus = await environment.preflight()
+    if (environmentStatus.sourceRevision !== branchState.spec.benchmarkSourceRevision) {
+      throw new ProtocolError('Cross-final Benchmark Source Revision 与源进化 Run 不一致')
+    }
+    for (const instanceId of context.bundle.benchmark.allInstanceIds) await environment.taskLayout(instanceId)
+
+    const frozenCandidates = new Map(branchState.spec.candidates.map((candidate) => [candidate.id, candidate]))
+    const h0State = frozenCandidates.get(baselineId)
+    const championState = frozenCandidates.get(championId)
+    const h0Root = join(branchRoot, 'candidates', baselineId)
+    const championRoot = join(branchRoot, 'candidates', championId)
+    const h0Workspace = await realpath(join(h0Root, 'workspace'))
+    const championWorkspace = await realpath(join(championRoot, 'workspace'))
+    const integrityOptions = {
+      sourceRevision: branchState.spec.targetSourceRevision,
+      maximumFileBytes: context.bundle.target.mutation.limits.maximumFileBytes,
+      maximumTreeEntries: context.bundle.target.mutation.limits.maximumTreeEntries,
+    }
+    await assertCandidateIntegrity({
+      ...integrityOptions,
+      candidateId: baselineId,
+      workspace: h0Workspace,
+      manifest: await readJsonFile(join(h0Root, 'manifest.json')),
+      expectedDigest: h0State?.digest,
+      label: 'Cross-final H0',
+    })
+    await assertCandidateIntegrity({
+      ...integrityOptions,
+      candidateId: championId,
+      workspace: championWorkspace,
+      manifest: await readJsonFile(join(championRoot, 'manifest.json')),
+      expectedDigest: championState?.digest,
+      label: 'Cross-final Champion',
+    })
+
+    state.status = 'running'
+    state.lastResumedAt = new Date().toISOString()
+    delete state.failure
+    await writeJsonFile(statePath, state)
+    const seeds = context.bundle.experiment.evolution.seeds
+    const [baselineRecords, candidateRecords] = await Promise.all([
+      environment.runCandidatePartition({
+        candidateId: baselineId,
+        candidateDigest: h0State.digest,
+        candidateWorkspace: h0Workspace,
+        model: context.bundle.experiment.models.solver,
+        partition: 'final',
+        seeds,
+        outputPath: join(crossRoot, 'results', `${baselineId}-final.jsonl`),
+      }),
+      environment.runCandidatePartition({
+        candidateId: championId,
+        candidateDigest: championState.digest,
+        candidateWorkspace: championWorkspace,
+        model: context.bundle.experiment.models.solver,
+        partition: 'final',
+        seeds,
+        outputPath: join(crossRoot, 'results', `${championId}-final.jsonl`),
+      }),
+    ])
+    const report = evaluateBenchmark({
+      benchmark: context.bundle.benchmark,
+      policy: context.bundle.policy,
+      run: {
+        id: runId,
+        baselineRevision: h0State.digest,
+        candidateRevision: championState.digest,
+      },
+      baselineRecords,
+      candidateRecords,
+      partitions: ['final'],
+      evolutionLedger: branchState.spec.ledger ?? null,
+      allowSealed: true,
+    })
+    report.crossFinal = {
+      sourceCampaignId: populationState.campaignId,
+      sourceBranchId,
+      sourceExperimentId: sourceSnapshot.experiment.id,
+      baselineId,
+      championId,
+      targetExperimentId: context.bundle.experiment.id,
+      targetBenchmarkId: context.bundle.benchmark.id,
+      pairedTasksAndSeeds: true,
+    }
+    await mkdir(dirname(reportPath), { recursive: true, mode: 0o700 })
+    await writeJsonFile(reportPath, report)
+    await writeFile(summaryPath, crossFinalSummaryMarkdown({
+      sourceCampaignId: populationState.campaignId,
+      championId,
+      targetBenchmarkId: context.bundle.benchmark.id,
+      report,
+    }), 'utf8')
+    state.status = 'completed'
+    state.completedAt = new Date().toISOString()
+    state.report = relative(crossRoot, reportPath).replaceAll('\\', '/')
+    await writeJsonFile(statePath, state)
+    onEvent({ stage: 'cross-final-completed', message: `Cross-final 报告已写入 ${reportPath}` })
+    return { runId, runRoot: crossRoot, reportPath, summaryPath, report }
+  } catch (error) {
+    state ??= { apiVersion: 'harness-rsi/v1alpha1', kind: 'CrossFinalRunState', spec: identity }
+    state.status = 'failed'
+    state.failedAt = new Date().toISOString()
+    state.failure = { message: error.message, details: error.details ?? [] }
+    await writeJsonFile(statePath, state).catch(() => {})
+    throw error
+  } finally {
+    const cleanupErrors = await stopContextModelGateways(context)
+    if (cleanupErrors.length > 0) {
+      onEvent({ stage: 'cleanup-warning', message: `Model Gateway 清理失败：${cleanupErrors.join('；')}` })
+    }
+    await release()
+  }
+}
