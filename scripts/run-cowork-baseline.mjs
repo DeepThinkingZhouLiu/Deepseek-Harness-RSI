@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, realpath, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 
@@ -26,6 +26,31 @@ function shuffled(values, seed) {
     ;[result[index], result[selected]] = [result[selected], result[index]]
   }
   return result
+}
+
+async function quarantinePartialH0Work(runRoot) {
+  const recoveryRoot = join(
+    runRoot,
+    'recovery/h0-resume',
+    new Date().toISOString().replaceAll(':', '-'),
+  )
+  const moves = []
+  for (const entry of await readdir(join(runRoot, 'candidates'), { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name !== 'h0') {
+      moves.push(['candidates', entry.name])
+    }
+  }
+  for (const entry of await readdir(join(runRoot, 'trials'), { withFileTypes: true })) {
+    if (entry.isDirectory() && /^baseline-[0-9]+$/u.test(entry.name)) {
+      moves.push(['trials', entry.name])
+    }
+  }
+  if (moves.length === 0) return
+  await mkdir(recoveryRoot, { recursive: true, mode: 0o700 })
+  for (const [group, name] of moves) {
+    await mkdir(join(recoveryRoot, group), { recursive: true, mode: 0o700 })
+    await rename(join(runRoot, group, name), join(recoveryRoot, group, name))
+  }
 }
 
 const { positionals, values } = parseArgs({
@@ -97,6 +122,7 @@ if (command === 'check') {
           || entries.some((entry) => /^checkpoint-[0-9]+\.json$/u.test(entry))) {
         throw new ProtocolError('--resume-h0 only accepts the original pre-iteration run')
       }
+      await quarantinePartialH0Work(runRoot)
     } else {
       await mkdir(runRoot, { recursive: false, mode: 0o700 })
     }

@@ -9,6 +9,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 
 import { validateModelGatewayEnvironment } from '../cowork-model-gateway.mjs'
 import { MODEL_GATEWAY_RELAY_URL } from '../model-gateway-relay.mjs'
@@ -178,12 +179,18 @@ export function createCodexUpdaterDriver({
             TZ: 'UTC',
           },
         })
-        result = await execute({
-          ...invocation,
-          timeoutMs: options.timeoutMs,
-          outputLimitBytes: 16 * 1024 * 1024,
-          secretValues: [apiKey, dummyKey],
-        })
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          result = await execute({
+            ...invocation,
+            timeoutMs: options.timeoutMs,
+            outputLimitBytes: 16 * 1024 * 1024,
+            secretValues: [apiKey, dummyKey],
+          })
+          const namespaceExhausted = !result.ok
+            && /bwrap: Creating new namespace failed:[\s\S]*ENOSPC/iu.test(result.stderr)
+          if (!namespaceExhausted || attempt === 3) break
+          await delay(2_000 * attempt)
+        }
         if (!result.ok) {
           const error = new ProtocolError('Codex Updater 执行失败', [
             result.timedOut ? 'reason=timeout' : `exitCode=${result.exitCode}`,
