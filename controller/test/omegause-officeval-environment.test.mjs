@@ -13,6 +13,7 @@ import {
   concurrentMap,
   OmegaUseOfficeValEnvironment,
   normalizeOmegaUseVerifierReward,
+  recoverableSolverWorkspace,
   solverFailureAllowsArtifactEvaluation,
   validateOmegaUseSourceManifest,
 } from '../src/environments/omegause-officeval.mjs'
@@ -42,6 +43,19 @@ test('只有重试耗尽的空模型正文允许继续评测已持久化产物',
   exhausted.retryable = true
   assert.equal(solverFailureAllowsArtifactEvaluation(exhausted), true)
   assert.equal(solverFailureAllowsArtifactEvaluation(new ProtocolError('model gateway HTTP 401')), false)
+})
+
+test('Controller 升级恢复最近一次有产物的 Solver 工作区', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'harness-rsi-solver-recovery-'))
+  await mkdir(join(root, 'workspace'))
+  await mkdir(join(root, 'solver-attempt-4', 'workspace'), { recursive: true })
+  await writeFile(join(root, 'solver-attempt-4', 'workspace', 'deliverable.pptx'), 'fixture')
+  const recovered = await recoverableSolverWorkspace(root, new Map(), {
+    maximumFiles: 10,
+    maximumBytes: 1024,
+    maximumFileBytes: 1024,
+  })
+  assert.equal(recovered, join(root, 'solver-attempt-4', 'workspace'))
 })
 
 test('OmegaUse 单题失败后停止派发新题，等待已有题安全收尾', async () => {

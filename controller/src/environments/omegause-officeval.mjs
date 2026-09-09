@@ -264,6 +264,20 @@ function changedArtifacts(before, after) {
   return output.sort((left, right) => left.path.localeCompare(right.path))
 }
 
+export async function recoverableSolverWorkspace(previousTrialRoot, before, limits) {
+  const entries = await readdir(previousTrialRoot, { withFileTypes: true })
+  const archived = entries
+    .filter((entry) => entry.isDirectory() && /^solver-attempt-[1-5]$/u.test(entry.name))
+    .sort((left, right) => Number(right.name.slice(15)) - Number(left.name.slice(15)))
+    .map((entry) => join(previousTrialRoot, entry.name, 'workspace'))
+  for (const candidate of [join(previousTrialRoot, 'workspace'), ...archived]) {
+    const info = await lstat(candidate).catch(() => null)
+    if (!info?.isDirectory()) continue
+    if (changedArtifacts(before, await snapshotWorkspace(candidate, limits)).length > 0) return candidate
+  }
+  return null
+}
+
 function artifactPolicyViolation(artifacts, limits) {
   if (artifacts.length > limits.maximumChangedFiles) return 'solver-artifact-count'
   const bytes = artifacts
@@ -671,6 +685,20 @@ export class OmegaUseOfficeValEnvironment {
         await copyRegularTree(oldSession, sessionRoot)
         recoveredSolver = { answer }
         trialProgress(context, 'solver-reused')
+      } else {
+        const recoveredWorkspace = await recoverableSolverWorkspace(
+          previousTrialRoot,
+          before,
+          this.environment.task.workspaceLimits,
+        )
+        if (recoveredWorkspace !== null) {
+          await rename(workspace, join(trialRoot, 'original-inputs'))
+          await copyRegularTree(recoveredWorkspace, workspace)
+          recoveredSolver = {
+            answer: 'Solver execution ended without final text; evaluating its persisted workspace artifacts.',
+          }
+          trialProgress(context, 'solver-artifact-reused')
+        }
       }
     }
     let solver = recoveredSolver
