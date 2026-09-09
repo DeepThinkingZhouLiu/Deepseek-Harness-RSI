@@ -116,6 +116,19 @@ test('single updater call gets one writable worktree and read-only feedback', ()
   assert.equal(invocation.args[preset + 1], 'standard')
 })
 
+test('updater supports a root-owned Bubblewrap namespace without changing normal mode', () => {
+  if (process.getuid?.() !== 0 || process.getgid?.() !== 0) return
+  const invocation = buildUpdaterInvocation({
+    ...invocationOptions(),
+    uid: 0,
+    gid: 0,
+    privilegedHost: true,
+  })
+  assert.equal(invocation.command, '/usr/bin/bwrap')
+  assert.equal(invocation.args.includes('--unshare-user'), false)
+  assert.equal(includesSequence(invocation.args, ['--cap-drop', 'ALL']), true)
+})
+
 test('analysis-only updater call mounts the candidate read-only', () => {
   const invocation = buildUpdaterInvocation({ ...invocationOptions(), candidateReadOnly: true })
   assert.equal(mountMode(

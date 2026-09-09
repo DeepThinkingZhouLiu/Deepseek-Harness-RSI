@@ -173,6 +173,29 @@ test('generic sandbox can provide an empty proc directory for restricted kernels
   }), ProtocolError)
 })
 
+test('root host can create the same boundary without a user namespace', () => {
+  if (process.getuid?.() !== 0 || process.getgid?.() !== 0) return
+  const result = buildBubblewrapInvocation({
+    invocation: { command: '/usr/bin/true', args: [], cwd: '/work', env: {} },
+    uid: 0,
+    gid: 0,
+    privilegedHost: true,
+    mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
+  })
+  assert.equal(result.command, '/usr/bin/bwrap')
+  assert.equal(result.args.includes('--unshare-user'), false)
+  assert.equal(includesSequence(result.args, ['--cap-drop', 'ALL']), true)
+  assert.equal(result.args.includes('--unshare-net'), true)
+  assert.equal(result.args.includes('--uid'), false)
+  assert.throws(() => buildBubblewrapInvocation({
+    invocation: { command: '/usr/bin/true', args: [], cwd: '/work', env: {} },
+    uid: 1001,
+    gid: 1001,
+    privilegedHost: true,
+    mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
+  }), /root 宿主/u)
+})
+
 test('generic sandbox 只允许当前宿主身份保留附加组', () => {
   const uid = process.getuid?.()
   const gid = process.getgid?.()

@@ -206,15 +206,26 @@ export function buildBubblewrapInvocation({
   maskedPaths = [],
   preserveSupplementaryGroups = false,
   guestIdentity = 'root',
+  privilegedHost = false,
 }) {
-  const userId = positiveIdentity(uid, 'sandbox uid')
-  const groupId = positiveIdentity(gid, 'sandbox gid')
+  if (typeof privilegedHost !== 'boolean') {
+    throw new ProtocolError('privilegedHost 必须是布尔值')
+  }
+  const userId = privilegedHost ? uid : positiveIdentity(uid, 'sandbox uid')
+  const groupId = privilegedHost ? gid : positiveIdentity(gid, 'sandbox gid')
+  if (privilegedHost && (userId !== 0 || groupId !== 0
+      || process.getuid?.() !== 0 || process.getgid?.() !== 0)) {
+    throw new ProtocolError('privilegedHost 仅允许 root 宿主进程使用')
+  }
   const bwrap = absolutePath(bwrapPath, 'bwrapPath')
   const setpriv = absolutePath(setprivPath, 'setprivPath')
   if (typeof preserveSupplementaryGroups !== 'boolean') {
     throw new ProtocolError('preserveSupplementaryGroups 必须是布尔值')
   }
-  if (preserveSupplementaryGroups
+  if (privilegedHost && preserveSupplementaryGroups) {
+    throw new ProtocolError('privilegedHost 不保留宿主附加组')
+  }
+  if (!privilegedHost && preserveSupplementaryGroups
       && (process.getuid?.() !== userId || process.getgid?.() !== groupId)) {
     throw new ProtocolError('只有保持当前宿主 UID/GID 时才能保留附加组')
   }
@@ -243,14 +254,16 @@ export function buildBubblewrapInvocation({
   const bwrapArguments = [
     '--die-with-parent',
     '--new-session',
-    '--unshare-user',
+    ...(privilegedHost ? [] : ['--unshare-user']),
     '--unshare-pid',
     '--unshare-ipc',
     '--unshare-uts',
     '--unshare-cgroup',
     ...(network === 'none' ? ['--unshare-net'] : []),
-    '--uid', guestIdentity === 'host' ? String(userId) : '0',
-    '--gid', guestIdentity === 'host' ? String(groupId) : '0',
+    ...(privilegedHost ? [] : [
+      '--uid', guestIdentity === 'host' ? String(userId) : '0',
+      '--gid', guestIdentity === 'host' ? String(groupId) : '0',
+    ]),
     '--cap-drop', 'ALL',
     '--hostname', hostname,
     ...destinationParents(mounts),
@@ -288,8 +301,8 @@ export function buildBubblewrapInvocation({
   ]
 
   return {
-    command: setpriv,
-    args: [
+    command: privilegedHost ? bwrap : setpriv,
+    args: privilegedHost ? bwrapArguments : [
       `--reuid=${userId}`,
       `--regid=${groupId}`,
       preserveSupplementaryGroups ? '--keep-groups' : '--clear-groups',

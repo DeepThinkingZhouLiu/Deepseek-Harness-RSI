@@ -113,13 +113,15 @@ export function buildUpdaterInvocation({
   setprivPath = '/usr/bin/setpriv',
   gatewayRelayPath,
   preserveSupplementaryGroups = false,
+  privilegedHost = false,
   baseEnv = process.env,
 }) {
   if (!UPDATER_BACKENDS.has(backend)) {
     throw new ProtocolError(`未知 Updater backend：${backend}`)
   }
-  if (!Number.isInteger(uid) || uid < 1 || !Number.isInteger(gid) || gid < 1) {
-    throw new ProtocolError('Updater uid/gid 必须是正整数')
+  if (!Number.isInteger(uid) || !Number.isInteger(gid)
+      || (privilegedHost ? uid !== 0 || gid !== 0 : uid < 1 || gid < 1)) {
+    throw new ProtocolError('Updater uid/gid 与宿主执行模式不匹配')
   }
   const workspace = resolve(candidateRoot)
   const repository = resolve(gitRoot)
@@ -339,6 +341,7 @@ export function buildUpdaterInvocation({
     bwrapPath,
     setprivPath,
     preserveSupplementaryGroups,
+    privilegedHost,
     // Claude Code 2.1.263 拒绝在 namespace root 身份下使用非交互权限旁路。
     // 宿主本身已是普通用户，因此仅对 Claude 保持相同的非 root UID/GID。
     guestIdentity: backend === 'claude-code-cli' ? 'host' : 'root',

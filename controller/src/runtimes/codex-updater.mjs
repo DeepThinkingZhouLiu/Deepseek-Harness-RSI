@@ -113,9 +113,11 @@ export function createCodexUpdaterDriver({
       const socketPath = join(shortRunRoot, 'model-gateway.sock')
       const uid = process.getuid?.()
       const gid = process.getgid?.()
-      if (!Number.isInteger(uid) || uid < 1 || !Number.isInteger(gid) || gid < 1) {
-        throw new ProtocolError('Codex Updater 拒绝以 root 或未知宿主身份运行')
+      if (!Number.isInteger(uid) || uid < 0 || !Number.isInteger(gid) || gid < 0
+          || (uid === 0) !== (gid === 0)) {
+        throw new ProtocolError('Codex Updater 宿主身份无效')
       }
+      const privilegedHost = uid === 0
 
       let gateway
       let result
@@ -169,9 +171,10 @@ export function createCodexUpdaterDriver({
           peerLogs: [],
           bwrapPath: updater.runtime.bwrapPath,
           setprivPath: updater.runtime.setprivPath,
-          // 本 Driver 在普通宿主用户下运行，setgroups 对非 root 不可用；
-          // UID/GID 已核验为当前身份，保留附加组不扩大空根 Bubblewrap 的挂载边界。
-          preserveSupplementaryGroups: true,
+          // 普通用户先经 setpriv 保持当前身份；root 宿主直接创建 mount/network
+          // namespace，再由 Bubblewrap 在进入 Updater 前丢弃全部 capabilities。
+          preserveSupplementaryGroups: !privilegedHost,
+          privilegedHost,
           baseEnv: {
             PATH: '/usr/local/bin:/usr/bin:/bin',
             LANG: 'C.UTF-8',
