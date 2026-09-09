@@ -1,4 +1,4 @@
-import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 
@@ -34,6 +34,7 @@ const { positionals, values } = parseArgs({
     experiment: { type: 'string' },
     'run-id': { type: 'string' },
     'source-run-id': { type: 'string' },
+    'resume-h0': { type: 'boolean' },
   },
 })
 const command = positionals[0] ?? 'check'
@@ -88,7 +89,17 @@ if (command === 'check') {
     await mkdir(runRoot, { recursive: true, mode: 0o700 })
   }
   if (command === 'run') {
-    await mkdir(runRoot, { recursive: false, mode: 0o700 })
+    if (values['resume-h0']) {
+      const existingConfig = JSON.parse(await readFile(join(runRoot, 'experiment.json'), 'utf8'))
+      const entries = await readdir(runRoot)
+      if (JSON.stringify(existingConfig) !== JSON.stringify(bundle.config)
+          || entries.includes('frozen.json')
+          || entries.some((entry) => /^checkpoint-[0-9]+\.json$/u.test(entry))) {
+        throw new ProtocolError('--resume-h0 only accepts the original pre-iteration run')
+      }
+    } else {
+      await mkdir(runRoot, { recursive: false, mode: 0o700 })
+    }
   }
   const runtime = await createBaselineRuntime({
     bundle,

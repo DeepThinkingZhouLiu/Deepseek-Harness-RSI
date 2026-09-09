@@ -30,10 +30,10 @@ run_root=".rsi/baselines/$run_id"
 
 if [[ ! -f "$run_root/frozen.json" ]]; then
   if [[ -e "$run_root" ]]; then
-    echo "incomplete baseline run exists and automatic evolution resume is unavailable: $run_root" >&2
-    exit 1
+    "${runner[@]}" run --resume-h0 --experiment "$source_config" --run-id "$run_id"
+  else
+    "${runner[@]}" run --experiment "$source_config" --run-id "$run_id"
   fi
-  "${runner[@]}" run --experiment "$source_config" --run-id "$run_id"
 fi
 
 if [[ ! -f "$run_root/final-report.json" ]]; then
