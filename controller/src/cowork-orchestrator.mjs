@@ -1992,6 +1992,19 @@ export function createCoworkBranchEvolutionDriver({
           await writeImportedRecords(
             resultPath(runRoot, generation, parent.id, decisionPartition), baselinePack.decision.rawRecords,
           )
+        } else if (generation === 1 && parent.id === state.spec.baselineId) {
+          const initialBaselinePath = resultPath(runRoot, 0, parent.id, decisionPartition)
+          const initialBaselineRaw = await readResultFile(initialBaselinePath)
+          baselineRecords = await loadCompletedPartition({
+            path: initialBaselinePath,
+            benchmark: context.bundle.benchmark,
+            partition: decisionPartition,
+            seeds: state.spec.seeds,
+            label: `${parent.id}/${decisionPartition}/baseline`,
+          })
+          await writeImportedRecords(
+            resultPath(runRoot, generation, parent.id, decisionPartition), initialBaselineRaw,
+          )
         } else baselineRecords = await runPartition(parent, decisionPartition)
         return { feedbackPacket, baselineRecords: [...baselineRecords] }
       },
