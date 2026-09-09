@@ -3349,7 +3349,7 @@ async function finalizeCoworkRun({
   const baselineId = safeCandidateId(state.spec.baselineId)
   const championId = safeCandidateId(state.spec.championId)
   const controllerRevision = await trustedControllerRevision(repositoryRoot)
-  if (recovery === null && controllerRevision !== state.spec.controllerRevision) {
+  if (recovery === null && resume === null && controllerRevision !== state.spec.controllerRevision) {
     throw new ProtocolError('当前 Controller Revision 与 Run 冻结值不一致', [
       `run=${state.spec.controllerRevision ?? '(missing)'}`,
       `current=${controllerRevision}`,
