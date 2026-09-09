@@ -213,6 +213,20 @@ test('root host creates an empty network namespace before Bubblewrap', () => {
   assert.equal(includesSequence(result.args, ['--cap-drop', 'ALL']), true)
 })
 
+test('sandbox can expose the read-only DSW loader required by /usr/local Node', () => {
+  const result = buildBubblewrapInvocation({
+    invocation: { command: '/usr/local/bin/node', args: ['--version'], cwd: '/work', env: {} },
+    uid: 1001,
+    gid: 1001,
+    includeDswRuntimeLoader: true,
+    mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
+  })
+  assert.equal(includesSequence(result.args, ['--dir', '/etc/dsw']), true)
+  assert.equal(includesSequence(result.args, [
+    '--ro-bind-try', '/etc/dsw/runtime', '/etc/dsw/runtime',
+  ]), true)
+})
+
 test('generic sandbox 只允许当前宿主身份保留附加组', () => {
   const uid = process.getuid?.()
   const gid = process.getgid?.()

@@ -131,6 +131,17 @@ test('updater supports a root-owned Bubblewrap namespace without changing normal
   assert.equal(includesSequence(invocation.args, ['--cap-drop', 'ALL']), true)
 })
 
+test('updater mounts the DSW runtime loader only for /usr/local Node', () => {
+  const invocation = buildUpdaterInvocation({
+    ...invocationOptions(),
+    nodeBinary: '/usr/local/bin/node',
+  })
+  assert.equal(includesSequence(invocation.args, [
+    '--ro-bind-try', '/etc/dsw/runtime', '/etc/dsw/runtime',
+  ]), true)
+  assert.equal(buildUpdaterInvocation(invocationOptions()).args.includes('/etc/dsw/runtime'), false)
+})
+
 test('analysis-only updater call mounts the candidate read-only', () => {
   const invocation = buildUpdaterInvocation({ ...invocationOptions(), candidateReadOnly: true })
   assert.equal(mountMode(

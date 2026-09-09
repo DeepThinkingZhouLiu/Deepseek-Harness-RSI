@@ -342,6 +342,7 @@ export function buildUpdaterInvocation({
     setprivPath,
     preserveSupplementaryGroups,
     privilegedHost,
+    includeDswRuntimeLoader: node === '/usr/local/bin/node',
     // Claude Code 2.1.263 拒绝在 namespace root 身份下使用非交互权限旁路。
     // 宿主本身已是普通用户，因此仅对 Claude 保持相同的非 root UID/GID。
     guestIdentity: backend === 'claude-code-cli' ? 'host' : 'root',

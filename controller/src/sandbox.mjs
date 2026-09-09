@@ -208,9 +208,13 @@ export function buildBubblewrapInvocation({
   preserveSupplementaryGroups = false,
   guestIdentity = 'root',
   privilegedHost = false,
+  includeDswRuntimeLoader = false,
 }) {
   if (typeof privilegedHost !== 'boolean') {
     throw new ProtocolError('privilegedHost 必须是布尔值')
+  }
+  if (typeof includeDswRuntimeLoader !== 'boolean') {
+    throw new ProtocolError('includeDswRuntimeLoader 必须是布尔值')
   }
   const userId = privilegedHost ? uid : positiveIdentity(uid, 'sandbox uid')
   const groupId = privilegedHost ? gid : positiveIdentity(gid, 'sandbox gid')
@@ -275,6 +279,10 @@ export function buildBubblewrapInvocation({
     '--symlink', 'usr/lib', '/lib',
     '--symlink', 'usr/lib64', '/lib64',
     '--dir', '/etc',
+    ...(includeDswRuntimeLoader ? [
+      '--dir', '/etc/dsw',
+      '--ro-bind-try', '/etc/dsw/runtime', '/etc/dsw/runtime',
+    ] : []),
     '--ro-bind-try', '/etc/ssl', '/etc/ssl',
     '--ro-bind-try', '/etc/ca-certificates', '/etc/ca-certificates',
     '--ro-bind-try', '/etc/passwd', '/etc/passwd',
