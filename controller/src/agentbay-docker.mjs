@@ -270,6 +270,15 @@ export class AgentBayDockerClient {
   }
 
   async removeNetwork(network) {
+    const result = await this.docker(['network', 'rm', network], { allowExitCodes: [0, 1] })
+    if (result.exitCode === 0) return result
+
+    const attached = await this.docker([
+      'network', 'inspect', '--format', '{{range .Containers}}{{.Name}}{{"\\n"}}{{end}}', network,
+    ], { allowExitCodes: [0, 1], operation: 'network inspect' })
+    for (const name of attached.stdout.split('\n').map((value) => value.trim()).filter(Boolean)) {
+      await this.removeContainer(safeDockerName(name))
+    }
     return await this.docker(['network', 'rm', network], { allowExitCodes: [0, 1] })
   }
 
