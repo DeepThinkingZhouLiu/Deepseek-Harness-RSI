@@ -3426,6 +3426,7 @@ async function finalizeCoworkRun({
     docker: context.docker,
     runRoot,
   })
+  environment.allowRuntimeRecovery = recovery !== null || resume !== null
   onEvent({ stage: 'final-preflight', message: '重新确认冻结 Source 与 Benchmark Revision' })
   const environmentStatus = await environment.preflight()
   if (environmentStatus.sourceRevision !== state.spec.benchmarkSourceRevision) {
