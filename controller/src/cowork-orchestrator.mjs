@@ -3168,9 +3168,8 @@ async function loadPopulationFinalAuthorization({
     state.final?.evaluated !== false
     || typeof state.final?.attemptId !== 'string'
     || typeof state.final?.startedAt !== 'string'
-    || state.final?.failedAt !== undefined
   )) {
-    throw new ProtocolError('只能续跑仍在进行中的 Population Final')
+    throw new ProtocolError('只能续跑已领取且尚未完成的 Population Final')
   }
   safeRunId(state.campaignId)
   if (typeof state.configDigest !== 'string' || !/^[a-f0-9]{64}$/u.test(state.configDigest)
@@ -3220,7 +3219,7 @@ async function loadPopulationFinalAuthorization({
       throw new ProtocolError('Population 与 Best Branch 的 Final 失败状态不一致')
     }
   } else if (resumeFinal) {
-    if (branchState.metadata.status !== 'finalizing'
+    if (!['finalizing', 'final-failed'].includes(branchState.metadata.status)
         || branchState.spec.final?.evaluated !== false
         || branchState.spec.final?.attemptId !== state.final.attemptId
         || branchState.spec.final?.startedAt !== state.final.startedAt) {
@@ -3339,7 +3338,7 @@ async function finalizeCoworkRun({
     throw new ProtocolError('Final Recovery 与子 Run 失败状态不一致')
   }
   if (resume !== null && (
-    state.metadata.status !== 'finalizing'
+    !['finalizing', 'final-failed'].includes(state.metadata.status)
     || state.spec.final?.evaluated !== false
     || state.spec.final?.attemptId !== resume.attemptId
   )) {
@@ -3520,6 +3519,18 @@ async function finalizeCoworkRun({
         evolutionControllerRevision: recovery.evolutionControllerRevision,
         finalizerControllerRevision: recovery.finalizerControllerRevision,
       }),
+    })
+  } else if (population !== null) {
+    await savePopulationFinalState(population, {
+      evaluated: false,
+      attemptId: finalAttemptId,
+      startedAt: finalStartedAt,
+      branchId: population.branchId,
+      candidateId: championId,
+      ...finalAudit,
+    }, 'POPULATION_FINAL_RESUMED', {
+      branchId: population.branchId,
+      candidateId: championId,
     })
   }
   state.metadata.status = 'finalizing'
