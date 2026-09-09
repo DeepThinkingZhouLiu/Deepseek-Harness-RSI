@@ -340,6 +340,13 @@ export function normalizeOmegaUseVerifierReward(result) {
   return Math.max(0, Math.min(1, total / maximum))
 }
 
+export function solverFailureAllowsArtifactEvaluation(error) {
+  if (error?.retryable !== true) return false
+  return /model gateway returned no final content/iu.test([
+    error?.message, ...(error?.details ?? []),
+  ].join('\n'))
+}
+
 function compactText(value, maximumBytes) {
   const source = String(value ?? '')
   if (Buffer.byteLength(source, 'utf8') <= maximumBytes) return source
@@ -666,33 +673,42 @@ export class OmegaUseOfficeValEnvironment {
         trialProgress(context, 'solver-reused')
       }
     }
-    const solver = recoveredSolver ?? await runTrialStage({
-      trialRoot, context, stage: 'solver',
-      maximumAttempts: this.environment.task.maximumSolverAttempts,
-      prepareRetry: async (attempt) => {
-        // 重试从冻结输入重新开始，失败工作区和轨迹完整归档。
-        const archive = join(trialRoot, `solver-attempt-${attempt}`)
-        await mkdir(archive, { mode: 0o700 })
-        for (const path of [workspace, sessionRoot]) {
-          await rename(path, join(archive, basename(path))).catch((error) => {
-            if (error.code !== 'ENOENT') throw error
-          })
-        }
-        await materializeInputs(layout, workspace)
-      },
-      operation: () => withGlobalPermit('solver', () => this.solverDriver.run({
-        image: runtime.solverImage,
-        model,
-        candidateWorkspace,
-        taskWorkspace: workspace,
-        environmentAssets: layout.environmentAssets,
-        sessionRoot,
-        task: instruction,
-        name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-solver`,
-        timeoutMs: this.environment.docker.resources.timeoutSeconds * 1000,
-        containerWorkspace: this.environment.task.workspacePath,
-      })),
-    })
+    let solver = recoveredSolver
+    if (solver === null) {
+      try {
+        solver = await runTrialStage({
+          trialRoot, context, stage: 'solver',
+          maximumAttempts: this.environment.task.maximumSolverAttempts,
+          prepareRetry: async (attempt) => {
+            // 重试从冻结输入重新开始，失败工作区和轨迹完整归档。
+            const archive = join(trialRoot, `solver-attempt-${attempt}`)
+            await mkdir(archive, { mode: 0o700 })
+            for (const path of [workspace, sessionRoot]) {
+              await rename(path, join(archive, basename(path))).catch((error) => {
+                if (error.code !== 'ENOENT') throw error
+              })
+            }
+            await materializeInputs(layout, workspace)
+          },
+          operation: () => withGlobalPermit('solver', () => this.solverDriver.run({
+            image: runtime.solverImage,
+            model,
+            candidateWorkspace,
+            taskWorkspace: workspace,
+            environmentAssets: layout.environmentAssets,
+            sessionRoot,
+            task: instruction,
+            name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-solver`,
+            timeoutMs: this.environment.docker.resources.timeoutSeconds * 1000,
+            containerWorkspace: this.environment.task.workspacePath,
+          })),
+        })
+      } catch (error) {
+        if (!solverFailureAllowsArtifactEvaluation(error)) throw error
+        solver = { answer: 'Solver exhausted retries without final text; evaluating persisted workspace artifacts.' }
+        trialProgress(context, 'solver-artifact-evaluation')
+      }
+    }
 
     let artifacts = []
     let policyViolation = null

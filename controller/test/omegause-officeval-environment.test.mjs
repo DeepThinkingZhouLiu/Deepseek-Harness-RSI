@@ -13,6 +13,7 @@ import {
   concurrentMap,
   OmegaUseOfficeValEnvironment,
   normalizeOmegaUseVerifierReward,
+  solverFailureAllowsArtifactEvaluation,
   validateOmegaUseSourceManifest,
 } from '../src/environments/omegause-officeval.mjs'
 import { ProtocolError, validateBenchmark } from '../src/protocol.mjs'
@@ -32,6 +33,15 @@ test('OmegaUse 受控并发不超过上限且保持 Benchmark 顺序', async () 
   })
   assert.equal(maximumActive, 2)
   assert.deepEqual(result, [30, 5, 20, 1])
+})
+
+test('只有重试耗尽的空模型正文允许继续评测已持久化产物', () => {
+  const exhausted = new ProtocolError('Trial solver 失败', [
+    'model gateway returned no final content after 1 attempt(s) (finish_reason=length)',
+  ])
+  exhausted.retryable = true
+  assert.equal(solverFailureAllowsArtifactEvaluation(exhausted), true)
+  assert.equal(solverFailureAllowsArtifactEvaluation(new ProtocolError('model gateway HTTP 401')), false)
 })
 
 test('OmegaUse 单题失败后停止派发新题，等待已有题安全收尾', async () => {
