@@ -1,0 +1,422 @@
+import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import test from 'node:test'
+import { promisify } from 'node:util'
+
+import { readConfigFile } from '../src/config.mjs'
+import {
+  concurrentMap,
+  OmegaUseOfficeValEnvironment,
+  normalizeOmegaUseVerifierReward,
+  recoverableSolverWorkspace,
+  solverFailureAllowsArtifactEvaluation,
+  validateOmegaUseSourceManifest,
+} from '../src/environments/omegause-officeval.mjs'
+import { ProtocolError, validateBenchmark } from '../src/protocol.mjs'
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
+const execFileAsync = promisify(execFile)
+
+test('OmegaUse 受控并发不超过上限且保持 Benchmark 顺序', async () => {
+  let active = 0
+  let maximumActive = 0
+  const result = await concurrentMap([30, 5, 20, 1], 2, async (value) => {
+    active += 1
+    maximumActive = Math.max(maximumActive, active)
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, value))
+    active -= 1
+    return value
+  })
+  assert.equal(maximumActive, 2)
+  assert.deepEqual(result, [30, 5, 20, 1])
+})
+
+test('只有重试耗尽的空模型正文允许继续评测已持久化产物', () => {
+  const exhausted = new ProtocolError('Trial solver 失败', [
+    'model gateway returned no final content after 1 attempt(s) (finish_reason=length)',
+  ])
+  exhausted.retryable = true
+  assert.equal(solverFailureAllowsArtifactEvaluation(exhausted), true)
+  assert.equal(solverFailureAllowsArtifactEvaluation(new ProtocolError('model gateway HTTP 401')), false)
+})
+
+test('Controller 升级恢复最近一次有产物的 Solver 工作区', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'harness-rsi-solver-recovery-'))
+  await mkdir(join(root, 'workspace'))
+  await mkdir(join(root, 'solver-attempt-4', 'workspace'), { recursive: true })
+  await writeFile(join(root, 'solver-attempt-4', 'workspace', 'deliverable.pptx'), 'fixture')
+  const recovered = await recoverableSolverWorkspace(root, new Map(), {
+    maximumFiles: 10,
+    maximumBytes: 1024,
+    maximumFileBytes: 1024,
+  })
+  assert.equal(recovered, join(root, 'solver-attempt-4', 'workspace'))
+})
+
+test('OmegaUse 单题失败后停止派发新题，等待已有题安全收尾', async () => {
+  const started = []
+  let drained = false
+  await assert.rejects(concurrentMap([1, 2, 3, 4], 2, async (id) => {
+    started.push(id)
+    if (id === 1) throw new ProtocolError('fixture failure')
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10))
+    drained = true
+  }), /fixture failure/u)
+  assert.deepEqual(started, [1, 2])
+  assert.equal(drained, true)
+})
+
+function digest(value) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+function verifierResult(overrides = {}) {
+  return {
+    id: '060',
+    file_name: 'deliverable.pptx',
+    status: 'ok',
+    error: null,
+    dim1_pass: true,
+    dim1_reason: '',
+    dim2_items: [],
+    total_score: 5,
+    max_score: 10,
+    ...overrides,
+  }
+}
+
+test('OmegaUse 正式划分覆盖 91 道 Linux Task，训练/验证/测试互不重叠', async () => {
+  const source = await readFile(
+    resolve(repositoryRoot, 'benchmarks/omegause-officeval/source-manifest.json'),
+  )
+  assert.equal(digest(source), '8bf749b53988822a90520eba4761c6c311e17dd0e13bd78658b261a921128291')
+  const manifest = validateOmegaUseSourceManifest(JSON.parse(source))
+  assert.equal(manifest.instances.size, 100)
+  assert.equal([...manifest.instances.values()].filter((entry) => !entry.comRequired).length, 91)
+  assert.equal(manifest.excluded.size, 9)
+
+  const formal = validateBenchmark(await readConfigFile(
+    resolve(repositoryRoot, 'benchmarks/cowork-omegause-officeval-linux-v1/benchmark.json'),
+  ))
+  assert.equal(formal.partitions.feedback.instanceIds.length, 55)
+  assert.equal(formal.partitions.selection.instanceIds.length, 18)
+  assert.equal(formal.partitions.final.instanceIds.length, 18)
+  assert.equal(formal.allInstanceIds.size, 91)
+  assert.ok([...formal.allInstanceIds].every((id) => !manifest.instances.get(id).comRequired))
+
+  const smoke = validateBenchmark(await readConfigFile(
+    resolve(repositoryRoot, 'benchmarks/cowork-omegause-officeval-smoke/benchmark.json'),
+  ))
+  assert.deepEqual(
+    [...smoke.allInstanceIds].sort(),
+    ['officeval_003', 'officeval_060', 'officeval_090'],
+  )
+  assert.ok([...smoke.allInstanceIds].every((id) => formal.partitions.feedback.instanceIds.includes(id)))
+})
+
+test('OmegaUse 连续分数按 Dim1 门槛归一化到 [0,1]', () => {
+  assert.equal(normalizeOmegaUseVerifierReward(verifierResult()), 0.5)
+  assert.equal(normalizeOmegaUseVerifierReward(verifierResult({ total_score: -5 })), 0)
+  assert.equal(normalizeOmegaUseVerifierReward(verifierResult({ total_score: 15 })), 1)
+  assert.equal(normalizeOmegaUseVerifierReward(verifierResult({ dim1_pass: false })), 0)
+  assert.equal(normalizeOmegaUseVerifierReward(verifierResult({
+    status: 'error',
+    error: '目录下未找到 .pptx 文档',
+    max_score: 0,
+  })), 0)
+  assert.throws(
+    () => normalizeOmegaUseVerifierReward(verifierResult({ max_score: 0 })),
+    /max_score 必须为正数/u,
+  )
+})
+
+test('OmegaUse Solver 使用配置的五次尝试并恢复冻结输入，Verifier 重试复用交付物', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-officeval-stage-retry-'))
+  const input = join(root, 'input.docx')
+  await writeFile(input, 'frozen-input')
+  let solverCalls = 0
+  let verifierCalls = 0
+  const environment = new OmegaUseOfficeValEnvironment({
+    runRoot: root, repositoryRoot,
+    environment: {
+      task: { workspacePath: '/workspace', maximumSolverAttempts: 5, workspaceLimits: {
+        maximumFiles: 10, maximumBytes: 1024, maximumFileBytes: 1024,
+        maximumChangedFiles: 10, maximumChangedBytes: 1024,
+      } },
+      docker: { resources: { timeoutSeconds: 10 } },
+      feedback: { maximumTextBytesPerCase: 1024 },
+    },
+    solverDriver: { async run({ taskWorkspace, sessionRoot }) {
+      solverCalls += 1
+      await mkdir(sessionRoot)
+      assert.equal(await readFile(join(taskWorkspace, 'input.docx'), 'utf8'), 'frozen-input')
+      if (solverCalls < 5) {
+        await writeFile(join(taskWorkspace, 'input.docx'), 'partial-edit')
+        await writeFile(join(taskWorkspace, 'partial.docx'), 'partial')
+        await writeFile(join(sessionRoot, 'agent.jsonl'), 'partial-trace')
+        throw new ProtocolError('model gateway returned retryable HTTP 503')
+      }
+      assert.deepEqual(await readdir(taskWorkspace), ['input.docx'])
+      await writeFile(join(taskWorkspace, 'done.docx'), 'done')
+      return { answer: 'done' }
+    } },
+  })
+  environment.ensureRuntime = async () => ({ solverImage: 'fixture' })
+  environment.runVerifier = async ({ submission, logs, verifierCode }) => {
+    verifierCalls += 1
+    await Promise.all([mkdir(logs), mkdir(verifierCode)])
+    assert.deepEqual(await readdir(submission), ['done.docx'])
+    if (verifierCalls === 1) {
+      const error = new ProtocolError('fixture timeout')
+      error.processResult = { timedOut: true }
+      throw error
+    }
+    return verifierResult({ total_score: 0 })
+  }
+  const result = await environment.runTrial({
+    candidateId: 'h0', candidateWorkspace: root, model: {}, partition: 'feedback',
+    seed: 1, trialIndex: 0, executionId: 'fixture',
+    layout: { instanceId: 'officeval_001', task: { instruction: 'fixture' },
+      inputs: [{ name: 'input.docx', source: input, record: { bytes: 12, sha256: digest('frozen-input') } }] },
+  })
+  assert.equal(solverCalls, 5)
+  assert.equal(verifierCalls, 2)
+  assert.equal(result.reward, 0)
+  assert.equal(await readFile(join(result.trialRoot, 'solver-attempt-1/workspace/input.docx'), 'utf8'), 'partial-edit')
+  assert.equal(await readFile(join(result.trialRoot, 'solver-attempt-1/solver-session/agent.jsonl'), 'utf8'), 'partial-trace')
+  assert.deepEqual((await readdir(join(result.trialRoot, 'diagnostics'))).sort(), [
+    'solver-1.json', 'solver-2.json', 'solver-3.json', 'solver-4.json', 'verifier-1.json',
+  ])
+})
+
+test('OmegaUse 按题提交断点，恢复时保留 0 分结果并只补跑未完成题', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-officeval-checkpoint-'))
+  const candidateWorkspace = join(root, 'candidate')
+  const outputPath = join(root, 'results', 'generation-2', 'h0-feedback.jsonl')
+  await mkdir(candidateWorkspace)
+  const instanceIds = ['officeval_001', 'officeval_002', 'officeval_003']
+  const benchmark = {
+    partitions: { feedback: { instanceIds } },
+    allInstanceIds: new Set(instanceIds),
+    partitionByInstance: new Map(instanceIds.map((id) => [id, 'feedback'])),
+  }
+  const environment = {
+    id: 'omegause-officeval',
+    protocol: 'omegause-officeval-docker-v1',
+    task: { maximumConcurrentTrials: 2 },
+    feedback: { maximumTextBytesPerCase: 32768 },
+  }
+  const firstCalls = []
+  const secondCalls = []
+
+  function runner(calls, failInstance = null) {
+    const solverDriver = {
+      id: 'msa-minimal-docker-v1',
+      cacheKey: 'msa-fixture',
+      async beginUsageBatch() { calls.push('batch:start') },
+      async endUsageBatch() { calls.push('batch:end') },
+    }
+    const value = new OmegaUseOfficeValEnvironment({
+      environment,
+      benchmark,
+      solverDriver,
+      docker: {},
+      runRoot: root,
+      repositoryRoot,
+    })
+    value.manifest = {}
+    value.sourceRevision = 'b'.repeat(64)
+    value.ensureRuntime = async () => {
+      value.runtimeRevision = 'c'.repeat(64)
+      return { baseImage: 'fixture', solverImage: 'fixture' }
+    }
+    value.taskLayout = async (instanceId) => ({
+      instanceId,
+      task: { instruction: `完成 ${instanceId}` },
+      inputs: [],
+    })
+    value.runTrial = async ({ candidateId, layout, partition, seed, trialIndex, executionId }) => {
+      calls.push(layout.instanceId)
+      const trialRoot = join(
+        root,
+        'trials',
+        executionId,
+        candidateId,
+        partition,
+        layout.instanceId,
+        `trial-${trialIndex + 1}-seed-${seed}`,
+      )
+      await mkdir(trialRoot, { recursive: true })
+      await writeFile(join(trialRoot, 'attempt.txt'), 'attempt\n')
+      if (layout.instanceId === failInstance) throw new ProtocolError('fixture infrastructure failure')
+      return {
+        seed,
+        reward: layout.instanceId === 'officeval_001' ? 0 : 0.5,
+        latencyMs: 1,
+        inputTokens: null,
+        outputTokens: null,
+        solverAnswer: `answer-${layout.instanceId}`,
+        verifierFeedback: `feedback-${layout.instanceId}`,
+        policyViolations: [],
+        artifacts: [],
+        trialRoot,
+      }
+    }
+    return value
+  }
+
+  const options = {
+    candidateId: 'h0',
+    candidateDigest: 'a'.repeat(64),
+    candidateWorkspace,
+    model: {
+      provider: 'fixture-provider',
+      model: 'fixture-model',
+      maxTokens: 128,
+      reasoningEffort: 'high',
+    },
+    partition: 'feedback',
+    seeds: [20260827],
+    outputPath,
+  }
+  await assert.rejects(
+    runner(firstCalls, 'officeval_003').runCandidatePartition(options),
+    /fixture infrastructure failure/u,
+  )
+  assert.deepEqual(firstCalls.sort(), [
+    'batch:end',
+    'batch:start',
+    'officeval_001',
+    'officeval_002',
+    'officeval_003',
+  ])
+
+  const resumed = await runner(secondCalls).runCandidatePartition(options)
+  assert.deepEqual(secondCalls, ['batch:start', 'officeval_003', 'batch:end'])
+  assert.equal(resumed.size, 3)
+  assert.equal(resumed.get('officeval_001').reward, 0)
+  assert.deepEqual(
+    (await readFile(outputPath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line).instance_id),
+    instanceIds,
+  )
+  const executionId = digest(resolve(outputPath)).slice(0, 12)
+  for (const instanceId of instanceIds) {
+    const checkpoint = join(
+      root,
+      'trials',
+      executionId,
+      'h0',
+      'feedback',
+      instanceId,
+      'committed-result.json',
+    )
+    assert.equal(JSON.parse(await readFile(checkpoint, 'utf8')).kind, 'TaskTrialCheckpoint')
+  }
+})
+
+test('OmegaUse Verifier 只读取隔离 Submission，并在无网络容器中评分', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-officeval-verifier-'))
+  const submission = join(root, 'submission')
+  const logs = join(root, 'logs')
+  const verifierCode = join(root, 'verifier-code')
+  const sourceCode = join(root, 'source-code')
+  await Promise.all([mkdir(submission), mkdir(sourceCode)])
+  const verifierPath = join(sourceCode, 'officeval_060_verifier.py')
+  const sharedPath = join(sourceCode, 'pdf_backend.py')
+  await Promise.all([
+    writeFile(verifierPath, 'def evaluate(path): return {}\n'),
+    writeFile(sharedPath, '# shared\n'),
+  ])
+  let invocation
+  const docker = {
+    async run(options) {
+      invocation = options
+      await writeFile(join(logs, 'result.json'), `${JSON.stringify(verifierResult())}\n`)
+      return { stdout: '', stderr: '', durationMs: 1 }
+    },
+  }
+  const runner = new OmegaUseOfficeValEnvironment({
+    environment: {
+      verifier: {
+        timeoutSeconds: 30,
+        resources: { cpus: 1, memory: '1g', pids: 64 },
+      },
+    },
+    benchmark: {},
+    solverDriver: {},
+    docker,
+    runRoot: root,
+    repositoryRoot,
+  })
+  runner.baseImage = 'harness-rsi/omegause-officeval:v1'
+  const result = await runner.runVerifier({
+    layout: {
+      instanceId: 'officeval_060',
+      verifierPath,
+      sharedFiles: [{
+        source: sharedPath,
+        record: { sha256: digest(await readFile(sharedPath)) },
+      }],
+      record: { verifier: { sha256: digest(await readFile(verifierPath)) } },
+    },
+    submission,
+    logs,
+    verifierCode,
+    name: 'officeval-verifier-fixture',
+  })
+
+  assert.equal(normalizeOmegaUseVerifierReward(result), 0.5)
+  assert.equal(invocation.network, 'none')
+  assert.equal(invocation.readOnlyRoot, true)
+  assert.equal(invocation.runAsCurrentUser, true)
+  assert.deepEqual(invocation.capabilities, [])
+  assert.deepEqual(invocation.inheritEnvironment, [])
+  assert.deepEqual(
+    invocation.mounts.map(({ target, readOnly }) => [target, readOnly]),
+    [['/submission', true], ['/verifier', true], ['/logs', false]],
+  )
+  for (const name of [
+    'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+    'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy',
+  ]) assert.equal(invocation.environment[name], '')
+})
+
+test('OmegaUse Verifier Runner 可以加载包含 dataclass 的官方评分器', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-officeval-dataclass-'))
+  const submission = join(root, 'submission')
+  const output = join(root, 'result.json')
+  const verifier = join(root, 'officeval_090_verifier.py')
+  await mkdir(submission)
+  await writeFile(verifier, `
+from dataclasses import dataclass
+
+@dataclass
+class Score:
+    value: float
+
+def evaluate(path):
+    score = Score(1.0)
+    return {
+        "id": "090", "file_name": "answer.xlsx", "status": "ok", "error": None,
+        "dim1_pass": True, "dim1_reason": "", "dim2_items": [],
+        "total_score": score.value, "max_score": 1.0,
+    }
+`, { encoding: 'utf8' })
+
+  await execFileAsync('python3', [
+    resolve(repositoryRoot, 'docker/omegause-officeval/run-verifier.py'),
+    '--verifier', verifier,
+    '--submission', submission,
+    '--output', output,
+    '--expected-id', 'officeval_090',
+  ])
+
+  const result = JSON.parse(await readFile(output, 'utf8'))
+  assert.equal(result.status, 'ok')
+  assert.equal(result.total_score, 1)
+})

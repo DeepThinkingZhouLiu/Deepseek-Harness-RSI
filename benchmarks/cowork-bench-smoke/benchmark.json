@@ -1,0 +1,45 @@
+{
+  "apiVersion": "harness-rsi/v1alpha1",
+  "kind": "Benchmark",
+  "metadata": {
+    "id": "cowork-bench-smoke-v1",
+    "name": "Cowork-Bench two-task GRHS smoke"
+  },
+  "spec": {
+    "source": {
+      "adapter": "cowork-bench",
+      "dataset": "DeepThinkingZhouLiu/cowork-evolution-benchmark",
+      "split": "benchmarks/cowork-evo-240-v0.1/splits/feedback.jsonl",
+      "revision": "59ee4f18b4a25f589df71652e1292cee3e115421"
+    },
+    "evaluator": {
+      "adapter": "cowork-bench",
+      "resultFormat": "harness-rsi/solver-result-jsonl-v2"
+    },
+    "expectedTotal": 4,
+    "partitions": {
+      "feedback": {
+        "visibility": "detailed",
+        "expectedCount": 2,
+        "instanceIds": [
+          "cowork-evo/cowork-bench-rzd-trip-plan-from-outline",
+          "cowork-evo/forte-legal-020-power-of-attorney-risk-report"
+        ]
+      },
+      "selection": {
+        "visibility": "aggregate-only",
+        "expectedCount": 1,
+        "instanceIds": [
+          "cowork-evo/officebench-1-15-syllabus-integrity"
+        ]
+      },
+      "final": {
+        "visibility": "sealed",
+        "expectedCount": 1,
+        "instanceIds": [
+          "cowork-evo/officebench-1-12-class-roster-counts"
+        ]
+      }
+    }
+  }
+}

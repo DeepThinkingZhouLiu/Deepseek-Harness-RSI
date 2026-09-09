@@ -1,0 +1,27 @@
+apiVersion: harness-rsi/v1alpha1
+kind: UpdaterAdapter
+metadata:
+  id: claude-code-cli-pnx
+  name: Claude Code CLI Updater
+spec:
+  protocol: claude-code-exec-v1
+  runtime:
+    executable: /cpfs01/pnx/.npm-global/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe
+    distributionRoot: /cpfs01/pnx/.npm-global/lib/node_modules/@anthropic-ai/claude-code
+    nodeBinary: /usr/local/bin/node
+    bwrapPath: /usr/bin/bwrap
+    setprivPath: /usr/bin/setpriv
+    package: "@anthropic-ai/claude-code"
+    version: 2.1.260
+    distributionDigest: d524bbffe312521861714a3280a08f793bde0a4a1f8afd46085486ca9515ab8e
+    maximumModelRequests: 64
+    secretEnvironment:
+      - RSI_CLAUDE_PROVIDER_API_KEY
+      - RSI_CLAUDE_PROVIDER_BASE_URL
+  prompt:
+    path: prompts/updater.md
+  output:
+    candidate: filesystem-diff
+    mutationReport:
+      kind: controller-artifact
+      name: mutation-report.json
