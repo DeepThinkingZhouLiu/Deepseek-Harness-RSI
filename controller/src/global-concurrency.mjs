@@ -5,8 +5,7 @@ import {
   realpath,
   rename,
   rm,
-  rmdir,
-  unlink,
+  stat,
   writeFile,
 } from 'node:fs/promises'
 import { hostname } from 'node:os'
@@ -18,6 +17,7 @@ const ROLES = Object.freeze({
   solver: 'RSI_GLOBAL_SOLVER_CONCURRENCY',
   updater: 'RSI_GLOBAL_UPDATER_CONCURRENCY',
 })
+const EMPTY_SLOT_STALE_MS = 30_000
 
 function configuration(role) {
   const environmentName = ROLES[role]
@@ -61,9 +61,32 @@ async function staleOwner(slotPath) {
   try {
     const owner = JSON.parse(await readFile(join(slotPath, 'owner.json'), 'utf8'))
     return owner.hostname === hostname() && !processAlive(owner.pid)
-  } catch {
-    return false
+  } catch (error) {
+    if (error?.code !== 'ENOENT') return false
+    try {
+      const info = await stat(slotPath)
+      return Date.now() - info.mtimeMs >= EMPTY_SLOT_STALE_MS
+    } catch (statError) {
+      if (statError?.code === 'ENOENT') return false
+      throw statError
+    }
   }
+}
+
+async function releaseSlot(slotPath, roleRoot, owner, nonce, role) {
+  if (owner.nonce !== nonce || owner.pid !== process.pid) {
+    throw new ProtocolError(`Global ${role} concurrency lease owner mismatch`)
+  }
+  const released = join(roleRoot, `.released-${randomUUID()}`)
+  try {
+    await rename(slotPath, released)
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      throw new ProtocolError(`Global ${role} concurrency lease is missing`, [error.message])
+    }
+    throw error
+  }
+  await rm(released, { recursive: true, force: true }).catch(() => {})
 }
 
 async function reclaimStaleSlot(slotPath, roleRoot) {
@@ -110,11 +133,7 @@ async function acquire(role) {
           } catch (error) {
             throw new ProtocolError(`全局 ${role} 并发令牌丢失`, [error.message])
           }
-          if (owner.nonce !== nonce || owner.pid !== process.pid) {
-            throw new ProtocolError(`全局 ${role} 并发令牌所有者不匹配`)
-          }
-          await unlink(ownerPath)
-          await rmdir(slotPath)
+          await releaseSlot(slotPath, roleRoot, owner, nonce, role)
         }
       } catch (error) {
         // mkdir 成功、owner 写入失败时不能遗留一个永远没有 owner 的死槽位。

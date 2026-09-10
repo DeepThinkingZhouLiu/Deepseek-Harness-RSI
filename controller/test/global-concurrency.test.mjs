@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -68,6 +68,34 @@ test('全局并发可回收同机崩溃进程遗留的槽位', async () => {
     pid: 2147483647,
     nonce: 'stale-owner',
   })}\n`)
+  try {
+    let entered = false
+    await withGlobalPermit('solver', async () => {
+      entered = true
+    })
+    assert.equal(entered, true)
+    assert.deepEqual(await readdir(join(root, 'solver')), [])
+  } finally {
+    if (previous.root === undefined) delete process.env.RSI_GLOBAL_CONCURRENCY_ROOT
+    else process.env.RSI_GLOBAL_CONCURRENCY_ROOT = previous.root
+    if (previous.solver === undefined) delete process.env.RSI_GLOBAL_SOLVER_CONCURRENCY
+    else process.env.RSI_GLOBAL_SOLVER_CONCURRENCY = previous.solver
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('全局并发可回收中断释放留下的空槽位', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'harness-rsi-empty-concurrency-'))
+  const previous = {
+    root: process.env.RSI_GLOBAL_CONCURRENCY_ROOT,
+    solver: process.env.RSI_GLOBAL_SOLVER_CONCURRENCY,
+  }
+  process.env.RSI_GLOBAL_CONCURRENCY_ROOT = root
+  process.env.RSI_GLOBAL_SOLVER_CONCURRENCY = '1'
+  const staleSlot = join(root, 'solver', 'slot-001')
+  await mkdir(staleSlot, { recursive: true })
+  const old = new Date(Date.now() - 60_000)
+  await utimes(staleSlot, old, old)
   try {
     let entered = false
     await withGlobalPermit('solver', async () => {
