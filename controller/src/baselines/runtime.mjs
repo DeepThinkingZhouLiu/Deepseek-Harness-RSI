@@ -62,6 +62,14 @@ export async function loadBaselineConfiguration(path, repositoryRoot) {
         || config.maximumConcurrentTrials < 1)) {
     throw new ProtocolError('Invalid baseline maximumConcurrentTrials')
   }
+  if (config.feedbackTraversal !== undefined
+      && !['single-sample', 'full-pass'].includes(config.feedbackTraversal)) {
+    throw new ProtocolError('Invalid baseline feedbackTraversal')
+  }
+  if (config.finalCandidates !== undefined
+      && !['paired', 'winner-only'].includes(config.finalCandidates)) {
+    throw new ProtocolError('Invalid baseline finalCandidates')
+  }
   const readAdapter = (name) => readConfigFile(resolveInside(
     repositoryRoot,
     config.adapters[name],
@@ -634,7 +642,9 @@ export async function createBaselineRuntime({
   }
 
   async function evaluateFrozenFinal(frozen) {
-      const candidates = frozen.h0.id === frozen.champion.id
+      const candidates = config.finalCandidates === 'winner-only'
+        ? [frozen.champion]
+        : frozen.h0.id === frozen.champion.id
         ? [frozen.h0]
         : [frozen.h0, frozen.champion]
       environment.authorizeFinal(candidates)

@@ -1,7 +1,7 @@
 {
   "apiVersion": "harness-rsi/cowork-bench-manifest-v1",
-  "repositoryRevision": "aac0f28d4596eefbc50041b54ba3bbadf59d6f1b",
-  "taskTreeGitOid": "763bb1367c60aa81a68c9b9e022ba0d11ffb3425",
+  "repositoryRevision": "597038105268fa86ddb1c129c9c58db5f80a3a68",
+  "taskTreeGitOid": "c5d53bef9b5ded318c80ec70a024aeedb63a6b63",
   "tasks": [
     {
       "id": "cowork-evo/agentcompany-budget-variance-analysis",
@@ -389,16 +389,6 @@
       "contentSha256": "0bfdf3b43d89e80f95ae225fea2db46f729c4b665dc901e0833c2bc1fc8b34cf"
     },
     {
-      "id": "cowork-evo/officebench-1-10-highest-salary-duplicate",
-      "path": "tasks/xlsx/officebench-1-10-highest-salary-duplicate",
-      "contentSha256": "53a31cb5cde8b9902a370814849edecffb475cd42b4433913700cffb44e42b9b"
-    },
-    {
-      "id": "cowork-evo/officebench-1-10-lowest-budget-add-highest",
-      "path": "tasks/xlsx/officebench-1-10-lowest-budget-add-highest",
-      "contentSha256": "3a47bd1a4b776d07c05fe43e46bac66659b10a2f247a9eb9886377cf321d6463"
-    },
-    {
       "id": "cowork-evo/officebench-1-12-class-roster-counts",
       "path": "tasks/docx/officebench-1-12-class-roster-counts",
       "contentSha256": "ff5cd995f35f322816a556148030970c6bdede28717df29130cdf4361fd843bc"
@@ -424,14 +414,9 @@
       "contentSha256": "bdf4ef6f5675d08e918651b2eb82f678f8331f5e7f6a66920374e359292e99ed"
     },
     {
-      "id": "cowork-evo/officebench-1-14-score-column-swap",
-      "path": "tasks/xlsx/officebench-1-14-score-column-swap",
-      "contentSha256": "86465d2c4e077f54585742e07b588220d4ed894851d66b36b10ec7d82157d552"
-    },
-    {
       "id": "cowork-evo/officebench-1-15-house-creak",
       "path": "tasks/docx/officebench-1-15-house-creak",
-      "contentSha256": "35e994c31c6b77357b24806f5a3fed9ca70732d980c0e4c42f5bfbd731746d3b"
+      "contentSha256": "d30d01ab051a8c382ec278ae772f9521b9fb1e225055328d96a9f2b2df76141c"
     },
     {
       "id": "cowork-evo/officebench-1-15-project-report-reference",
@@ -441,22 +426,17 @@
     {
       "id": "cowork-evo/officebench-1-15-syllabus-integrity",
       "path": "tasks/docx/officebench-1-15-syllabus-integrity",
-      "contentSha256": "6fc8e03187bc1ca328bd07de7de8ebd813b758b0dd8460a4d98cf0628a44a885"
+      "contentSha256": "3ee2af55486ddf921900591837dce4cf163f4a3ef35ef85be6fb4223d6501508"
     },
     {
       "id": "cowork-evo/officebench-1-16-random-paragraph",
       "path": "tasks/docx/officebench-1-16-random-paragraph",
-      "contentSha256": "6980d9b3172fb375329bbd65ac9a816cb2c79e61320c6a3d4ce3748aee1294c0"
-    },
-    {
-      "id": "cowork-evo/officebench-1-16-test-sentence",
-      "path": "tasks/docx/officebench-1-16-test-sentence",
-      "contentSha256": "b4136cb700fb56687de26a0d5c39a2a19cae952f4b111d65438f6928e4191a48"
+      "contentSha256": "d7d8adb4754266c4fd2ab5da261cee99bddf3d9631c2c0fddea3d076e24bb2aa"
     },
     {
       "id": "cowork-evo/officebench-1-19-agreement-terms",
       "path": "tasks/docx/officebench-1-19-agreement-terms",
-      "contentSha256": "a367307acb840f219588e2381d0d3bce24e537c7c56976a6f433a32fb6f4d0db"
+      "contentSha256": "71c0c5c36a1a7233756783539042cac4b58096f97d6b28258f8e5ea87ed042d3"
     },
     {
       "id": "cowork-evo/officebench-1-19-paper-abstract",
@@ -466,12 +446,7 @@
     {
       "id": "cowork-evo/officebench-1-19-paper-metadata",
       "path": "tasks/docx/officebench-1-19-paper-metadata",
-      "contentSha256": "ae3059ca7e4bda8c7f1ed9bfe3f549d8c0ad29fc9df8455f1bfc8cade7b1c06c"
-    },
-    {
-      "id": "cowork-evo/officebench-1-3-rename-docx",
-      "path": "tasks/docx/officebench-1-3-rename-docx",
-      "contentSha256": "9734004b74c950ce7c9a5aaf09f81f5579b22ddd24d75c3913739020a71745b9"
+      "contentSha256": "792b601edb10c93cc7a0d131b003d8e0c8e464bfefe70a9a67ca529813a356ba"
     },
     {
       "id": "cowork-evo/officebench-1-5-budget-growth-forecast",
@@ -479,29 +454,9 @@
       "contentSha256": "b622b9ff591355503dc40558b8026c09fe76c189a098e291af2f697996a9e177"
     },
     {
-      "id": "cowork-evo/officebench-1-6-attendance",
-      "path": "tasks/xlsx/officebench-1-6-attendance",
-      "contentSha256": "05cff38a79f5460100710777f8fc59a8b3038cda8579edb57749e2804b135e8a"
-    },
-    {
-      "id": "cowork-evo/officebench-1-9-score-average",
-      "path": "tasks/xlsx/officebench-1-9-score-average",
-      "contentSha256": "81e16f4bdbf46e09f8355b61f64b2b3aab01dbeba30759ecbdd6df64d1b80e24"
-    },
-    {
-      "id": "cowork-evo/officebench-1-9-total-salary",
-      "path": "tasks/xlsx/officebench-1-9-total-salary",
-      "contentSha256": "c33d6092391e81196b09c9488f7cb696fcafcd75e8e9ece4d78b0782b411f28b"
-    },
-    {
-      "id": "cowork-evo/officebench-1-9-total-shopping-weight",
-      "path": "tasks/xlsx/officebench-1-9-total-shopping-weight",
-      "contentSha256": "98bdbdeec48bb56d39f553c400f927d28845944d8ea50403d9248b149b57d445"
-    },
-    {
       "id": "cowork-evo/officebench-2-18-highest-score-statement",
       "path": "tasks/docx/officebench-2-18-highest-score-statement",
-      "contentSha256": "1fc5db430e7a4be7da44e583e601f8cda6093016ac84ea1c5f90b39bfbadf129"
+      "contentSha256": "e1c288969b112e36eaf8acf92f5d0dcd89b473b17a1e41e1a5dc2c9f956a878b"
     },
     {
       "id": "cowork-evo/officebench-2-18-homework-assignment",
@@ -511,7 +466,7 @@
     {
       "id": "cowork-evo/officebench-2-18-shopping-list",
       "path": "tasks/docx/officebench-2-18-shopping-list",
-      "contentSha256": "56651cbcd3e86a096fba9953655bac1c3d84402fe401f25dbfbfae6bf28ad9e7"
+      "contentSha256": "6f3488537bcdf3cd043d945bf673a503d4418a65d985701d88df343ac63768e2"
     },
     {
       "id": "cowork-evo/officebench-2-19-teaching-report",
@@ -531,22 +486,22 @@
     {
       "id": "cowork-evo/officebench-2-20-all-cs161",
       "path": "tasks/docx/officebench-2-20-all-cs161",
-      "contentSha256": "8a86e3ed1a9fb93e0f205c75e2da7374efc033ffa858afdb3c836bf5ce288b0b"
+      "contentSha256": "a739e0d98e216595c0639ca7e5c31b1aad3035013f2c6583f7a0b99930dfa218"
     },
     {
       "id": "cowork-evo/officebench-2-20-cs-major-list",
       "path": "tasks/docx/officebench-2-20-cs-major-list",
-      "contentSha256": "39a4030b8bd4db243f4c8d02096189519348efa6d6aebb6361740afd0e4618cb"
+      "contentSha256": "f676b42b7280f4c05febc684ba2621ca67ccdf570fdea18090eb3be9c04d4328"
     },
     {
       "id": "cowork-evo/officebench-2-20-final-perfect",
       "path": "tasks/docx/officebench-2-20-final-perfect",
-      "contentSha256": "f20f85fb7dcc41d4006cab1827e437ed3ae4640f922e44168f52fe9501507854"
+      "contentSha256": "c8a397177c925d0b0d73b8ec6c014de2e12b8023f54cfd911fd92d927d035921"
     },
     {
       "id": "cowork-evo/officebench-2-21-bill-courses",
       "path": "tasks/docx/officebench-2-21-bill-courses",
-      "contentSha256": "c4891c4569854426a5c0aee496eebddc4161bcaa21d72c8ca2689d15c42c4265"
+      "contentSha256": "1f9759c57c461e2bb30d47e90ffa4cb3802387791178fa5dacf777d8afb8d9fa"
     },
     {
       "id": "cowork-evo/officebench-2-22-house-index-report",
@@ -571,7 +526,7 @@
     {
       "id": "cowork-evo/officebench-2-30-rename-student-id",
       "path": "tasks/docx/officebench-2-30-rename-student-id",
-      "contentSha256": "1d0c5b268a680224effe9e54242688865ca33eed3f2dcd1893af9f0cf8f3fca3"
+      "contentSha256": "6f52134e35b4c130b7dd5115e4fd665e93973ef84cf3e21268b912c8bbfa0822"
     },
     {
       "id": "cowork-evo/officebench-2-36-grade-report",
@@ -601,7 +556,7 @@
     {
       "id": "cowork-evo/officebench-2-6-homework-ocr",
       "path": "tasks/docx/officebench-2-6-homework-ocr",
-      "contentSha256": "38c2e24002bf86db208582e6d1e64872163f275abbcdf51478df27631646cd1f"
+      "contentSha256": "2c5132b8551a091fded29a0ad13d2e46bdbcbe9a1b144235ac3f5b440ec17a91"
     },
     {
       "id": "cowork-evo/officebench-2-7-paper-summary",
@@ -621,7 +576,7 @@
     {
       "id": "cowork-evo/officebench-3-22-homework-folder",
       "path": "tasks/docx/officebench-3-22-homework-folder",
-      "contentSha256": "19d3a53c2d29fd648c07e484f15412456f8eb78d9210748095217a842c2d085f"
+      "contentSha256": "ee68d19ae2b05cad25b39c8dddf785a0673121c28af0f41a5f31bc88ca4e5fd1"
     },
     {
       "id": "cowork-evo/officebench-3-5-invoice-payment-trends-briefing",
@@ -646,7 +601,7 @@
     {
       "id": "cowork-evo/officebench-3-60-cs161-folder",
       "path": "tasks/docx/officebench-3-60-cs161-folder",
-      "contentSha256": "b9f9589952e0754ab2fc83b959eb6b22ad82c4097193bb7d0cab382276cb6b2d"
+      "contentSha256": "f0837b963d309afbe3de2de55fb905489cd849440662575d0bae4d31321bed4a"
     },
     {
       "id": "cowork-evo/officebench-3-63-score-report-folder",
@@ -692,6 +647,11 @@
       "id": "cowork-evo/officebench-3-91-calendar-conflicts",
       "path": "tasks/docx/officebench-3-91-calendar-conflicts",
       "contentSha256": "719222d24e8276ec719a5a2fd33a4aad73d1bb94e6e1c29b1d4873346641995f"
+    },
+    {
+      "id": "cowork-evo/officeval-003-coordination-minutes-audit",
+      "path": "tasks/docx/officeval-003-coordination-minutes-audit",
+      "contentSha256": "f17427a85b2c4eebff8bbffb30aabb85ecb10104bbe8ce15d8e11ef44d91369e"
     },
     {
       "id": "cowork-evo/officeval-003-meeting-content-table-ruling",
@@ -842,6 +802,11 @@
       "id": "cowork-evo/officeval-088-product-docs-to-analysis-package",
       "path": "tasks/cross_office/officeval-088-product-docs-to-analysis-package",
       "contentSha256": "568cb259d554594d823f783ae69f263c97cda46c4aced0bdf283deeb362af054"
+    },
+    {
+      "id": "cowork-evo/officeval-088-product-release-dossier",
+      "path": "tasks/docx/officeval-088-product-release-dossier",
+      "contentSha256": "4b452edd390b4c426a72f0ddc7cbb3362f2d16a6a24aefce9acc01d1d0603ebf"
     },
     {
       "id": "cowork-evo/officeval-088-product-table",
@@ -1184,9 +1149,29 @@
       "contentSha256": "fef55444c501386e3a67de30ea85c4e99d4a1683033f8dbdd6c72032bbbc5033"
     },
     {
+      "id": "cowork-evo/workspace-admin-budget-period-audit",
+      "path": "tasks/xlsx/workspace-admin-budget-period-audit",
+      "contentSha256": "e63c50902edac52488c37284fbe6d0b54e52270936be3e13654e4b6cea5ea85d"
+    },
+    {
+      "id": "cowork-evo/workspace-annual-payroll-ledger-audit",
+      "path": "tasks/xlsx/workspace-annual-payroll-ledger-audit",
+      "contentSha256": "532dcb0e7cb5fae62e9ffe877507bd686c2dc5bd9d2794f0ebb7f3df7b93d67e"
+    },
+    {
       "id": "cowork-evo/workspace-bank-ledger",
       "path": "tasks/xlsx/workspace-bank-ledger",
       "contentSha256": "7162cc37dadb48ff1e8ae82a017c91629b0ba971c28b0556262bc75f6e05492f"
+    },
+    {
+      "id": "cowork-evo/workspace-canteen-stock-procurement",
+      "path": "tasks/xlsx/workspace-canteen-stock-procurement",
+      "contentSha256": "a3b69900c591e1eec1659cbcce00ff542ae5542ef45972274215cca4c150486b"
+    },
+    {
+      "id": "cowork-evo/workspace-commerce-metric-reconciliation",
+      "path": "tasks/xlsx/workspace-commerce-metric-reconciliation",
+      "contentSha256": "c3420140ddd4443b4717b95899076104fbaabee66f5760b7faa9d1038d0ebeb2"
     },
     {
       "id": "cowork-evo/workspace-event-plan",
@@ -1199,9 +1184,24 @@
       "contentSha256": "35e3ca12838fc6ba6f416630e6462ae039d7fd061e92b884df3536965f8753d1"
     },
     {
+      "id": "cowork-evo/workspace-hr-attrition-stratification",
+      "path": "tasks/xlsx/workspace-hr-attrition-stratification",
+      "contentSha256": "a906a63945c8be89e9b90122803686154b03e9638c0cbdac4018889a6690d04e"
+    },
+    {
+      "id": "cowork-evo/workspace-payroll-reconciliation",
+      "path": "tasks/xlsx/workspace-payroll-reconciliation",
+      "contentSha256": "2c905af6d8c77ba984a0c0b1ec6fa7e56a05c899e8ab3705375ab761d840dafe"
+    },
+    {
       "id": "cowork-evo/workspace-strategy-long-horizon",
       "path": "tasks/xlsx/workspace-strategy-long-horizon",
       "contentSha256": "38886b9bd8081576cbd3e04959eaab62a021d3c11ec68d38a3d8010b0afa869b"
+    },
+    {
+      "id": "cowork-evo/workspace-trade-series-audit",
+      "path": "tasks/xlsx/workspace-trade-series-audit",
+      "contentSha256": "1cdc4add8ccfd2ea4fe92a202922394ffa9e8cc41dfc3a6e48d5c74ac438ec01"
     }
   ]
 }

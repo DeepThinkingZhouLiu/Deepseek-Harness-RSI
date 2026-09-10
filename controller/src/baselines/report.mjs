@@ -47,3 +47,20 @@ export function pairedReport(baseline, candidate) {
     compositionalOOD: summarize(candidate.filter((record) => record.domain === 'cross_office')),
   }
 }
+
+export function winnerReport(candidate) {
+  const overall = selectionAggregate(candidate)
+  if (candidate.some((record) => typeof record.correct !== 'boolean')) {
+    throw new ProtocolError('Final requires native Judge pass/fail results')
+  }
+  const summarize = (rows) => rows.length === 0 ? null : {
+    ...selectionAggregate(rows),
+    resolved: rows.filter((record) => record.correct).length,
+  }
+  return {
+    overall: { ...overall, resolved: candidate.filter((record) => record.correct).length },
+    byDomain: Object.fromEntries(['docx', 'ppt', 'xlsx', 'cross_office'].map(
+      (domain) => [domain, summarize(candidate.filter((record) => record.domain === domain))],
+    )),
+  }
+}

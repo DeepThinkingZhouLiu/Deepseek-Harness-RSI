@@ -8,10 +8,10 @@ spec:
   source:
     datasetRootEnvironment: RSI_COWORK_BENCH_DATASET_ROOT
     evaluatorRootEnvironment: RSI_COWORK_BENCH_EVALUATOR_ROOT
-    datasetRevision: aac0f28d4596eefbc50041b54ba3bbadf59d6f1b
-    evaluatorRevision: aac0f28d4596eefbc50041b54ba3bbadf59d6f1b
+    datasetRevision: 597038105268fa86ddb1c129c9c58db5f80a3a68
+    evaluatorRevision: 597038105268fa86ddb1c129c9c58db5f80a3a68
     manifestPath: benchmarks/cowork-bench-240/task-manifest.json
-    manifestDigest: 7183e1f2b9465271da2f5ac5d403892e631c849edfedc76ffd620165ae6cbb73
+    manifestDigest: 422d739a36cf6d02458adb8c4d6d67f2c416ac7133e7b94c0e9b144f84321f23
   task:
     workspacePath: /workspace
     environmentAssets: environments/omegause-officeval-assets

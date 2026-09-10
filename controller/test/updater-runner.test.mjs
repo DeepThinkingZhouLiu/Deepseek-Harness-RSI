@@ -116,7 +116,7 @@ test('single updater call gets one writable worktree and read-only feedback', ()
   assert.equal(invocation.args[preset + 1], 'standard')
 })
 
-test('updater supports a root-owned Bubblewrap namespace without changing normal mode', () => {
+test('root updater keeps Bubblewrap confinement and uses the Unix relay on host network', () => {
   if (process.getuid?.() !== 0 || process.getgid?.() !== 0) return
   const invocation = buildUpdaterInvocation({
     ...invocationOptions(),
@@ -125,8 +125,8 @@ test('updater supports a root-owned Bubblewrap namespace without changing normal
     privilegedHost: true,
     gatewaySocketPath: '/srv/updater-run/model-gateway.sock',
   })
-  assert.equal(invocation.command, '/usr/bin/unshare')
-  assert.deepEqual(invocation.args.slice(0, 2), ['--net', '/usr/bin/bwrap'])
+  assert.equal(invocation.command, '/usr/bin/bwrap')
+  assert.equal(invocation.args.includes('--unshare-net'), false)
   assert.equal(invocation.args.includes('--unshare-user'), false)
   assert.equal(includesSequence(invocation.args, ['--cap-drop', 'ALL']), true)
 })

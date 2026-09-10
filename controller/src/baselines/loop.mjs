@@ -34,9 +34,11 @@ export async function runBaseline({
   feedbackIds,
   runtime,
   maximumReflectionRounds = 3,
+  feedbackTraversal = 'single-sample',
 }) {
   if (!Number.isSafeInteger(budget) || budget < 1 || !Array.isArray(feedbackIds)
-      || feedbackIds.length === 0 || new Set(feedbackIds).size !== feedbackIds.length) {
+      || feedbackIds.length === 0 || new Set(feedbackIds).size !== feedbackIds.length
+      || !['single-sample', 'full-pass'].includes(feedbackTraversal)) {
     throw new ProtocolError('Invalid baseline configuration')
   }
   const method = getBaselineMethod(methodId)
@@ -62,10 +64,12 @@ export async function runBaseline({
         current,
         feedbackIds,
         iteration,
+        budget,
         state: methodState,
         evidence,
         history: structuredClone(history),
         maximumReflectionRounds,
+        feedbackTraversal,
       })
       methodState = proposed.state
       const { candidate, report } = proposed

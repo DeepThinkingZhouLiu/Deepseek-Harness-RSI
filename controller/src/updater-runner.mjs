@@ -346,7 +346,10 @@ export function buildUpdaterInvocation({
     // Claude Code 2.1.263 拒绝在 namespace root 身份下使用非交互权限旁路。
     // 宿主本身已是普通用户，因此仅对 Claude 保持相同的非 root UID/GID。
     guestIdentity: backend === 'claude-code-cli' ? 'host' : 'root',
-    network: isolatedGateway ? 'none' : 'shared',
+    // Root fallback cannot configure loopback in a private net namespace on
+    // hosts without CAP_NET_ADMIN. Keep the Unix relay and mount/capability
+    // confinement, but use host networking only for that privileged fallback.
+    network: isolatedGateway && !privilegedHost ? 'none' : 'shared',
     procMode: backend === 'codex-cli'
       ? 'synthetic-self'
       : backend === 'claude-code-cli'

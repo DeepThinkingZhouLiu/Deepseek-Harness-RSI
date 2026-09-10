@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util'
 
 import { loadCoworkBenchmark } from '../controller/src/baselines/benchmark.mjs'
 import { runBaseline } from '../controller/src/baselines/loop.mjs'
-import { pairedReport } from '../controller/src/baselines/report.mjs'
+import { pairedReport, winnerReport } from '../controller/src/baselines/report.mjs'
 import {
   createBaselineRuntime,
   loadBaselineConfiguration,
@@ -149,6 +149,7 @@ if (command === 'check') {
         method: bundle.config.method,
         budget: bundle.config.candidateBudget,
         maximumReflectionRounds: bundle.config.maximumReflectionRounds,
+        feedbackTraversal: bundle.config.feedbackTraversal,
         feedbackIds,
         runtime,
       })
@@ -168,7 +169,9 @@ if (command === 'check') {
         if (error.code !== 'EEXIST') throw error
       })
       const results = await runtime.final(frozen)
-      const report = pairedReport(results[frozen.h0.id], results[frozen.champion.id])
+      const report = bundle.config.finalCandidates === 'winner-only'
+        ? winnerReport(results[frozen.champion.id])
+        : pairedReport(results[frozen.h0.id], results[frozen.champion.id])
       await writeJsonFile(join(runRoot, 'final-report.json'), {
         ...report,
         usage: runtime.usage(),
@@ -178,7 +181,9 @@ if (command === 'check') {
     if (command === 'cross-final') {
       const frozen = JSON.parse(await readFile(join(sourceRunRoot, 'frozen.json'), 'utf8'))
       const results = await runtime.crossFinal(frozen)
-      const report = pairedReport(results[frozen.h0.id], results[frozen.champion.id])
+      const report = bundle.config.finalCandidates === 'winner-only'
+        ? winnerReport(results[frozen.champion.id])
+        : pairedReport(results[frozen.h0.id], results[frozen.champion.id])
       await writeJsonFile(join(runRoot, 'cross-final-report.json'), {
         sourceRunId,
         targetRelease: release.id,

@@ -14,7 +14,7 @@ import { BaselineCoworkEnvironment, loadCoworkBenchmark } from '../src/baselines
 import { BaselineBudgetExhausted } from '../src/baselines/budget.mjs'
 import { anytimeValidation, runBaseline } from '../src/baselines/loop.mjs'
 import { baselineMethodIds, getBaselineMethod } from '../src/baselines/methods/index.mjs'
-import { pairedReport } from '../src/baselines/report.mjs'
+import { pairedReport, winnerReport } from '../src/baselines/report.mjs'
 import { formatPython, loadBaselineConfiguration } from '../src/baselines/runtime.mjs'
 import { REPOSITORY_ROOT } from '../src/config.mjs'
 
@@ -142,6 +142,37 @@ test('Evo-Bench continues from regressions while retaining a separate champion',
   assert.equal(seen.freezes[0].current.id, 'c3')
 })
 
+test('ACE full-pass traversal consumes every feedback task across bounded checkpoints', async () => {
+  const taskIds = Array.from({ length: 9 }, (_, index) => `task-${index + 1}`)
+  const visited = []
+  const runtime = {
+    initialize: async () => ({ id: 'h0' }),
+    checkBudget: async () => {},
+    reserveCandidate: async () => {},
+    selection: async () => ({ meanReward: 0.5, count: 30 }),
+    promotion: async () => true,
+    assertCandidate: async () => {},
+    generate: async ({ taskId }) => {
+      visited.push(taskId)
+      return { correct: true, bulletIds: [], instruction: taskId }
+    },
+    reflect: async () => ({ bullet_tags: [] }),
+    curate: async () => ({ operations: [] }),
+    materializePlaybook: async ({ iteration }) => ({ id: `c${iteration}` }),
+    checkpoint: async () => {},
+    freeze: async ({ champion }) => ({ championId: champion.id }),
+  }
+  await runBaseline({
+    method: 'ace',
+    budget: 4,
+    feedbackIds: taskIds,
+    feedbackTraversal: 'full-pass',
+    runtime,
+  })
+  assert.deepEqual([...new Set(visited)], taskIds)
+  assert.equal(visited.length, taskIds.length * 2)
+})
+
 test('candidate reservation is charged before a proposal and exhaustion freezes champion', async () => {
   const { runtime, seen } = fakeRuntime([0.5, 0.7])
   const evolve = runtime.evolve
@@ -191,6 +222,16 @@ test('paired report measures fixes and regressions on matched tasks', () => {
   const report = pairedReport(baseline, candidate)
   assert.equal(report.overall.fixRate, 1)
   assert.equal(report.overall.regressionRate, null)
+})
+
+test('winner-only report summarizes domains without rerunning H0', () => {
+  const report = winnerReport([
+    { instanceId: 'a', reward: 1, correct: true, domain: 'ppt' },
+    { instanceId: 'b', reward: 0.5, correct: false, domain: 'docx' },
+  ])
+  assert.equal(report.overall.meanReward, 0.75)
+  assert.equal(report.overall.resolved, 1)
+  assert.equal(report.byDomain.ppt.count, 1)
 })
 
 test('prompt formatting and anytime validation retain reference behavior', () => {

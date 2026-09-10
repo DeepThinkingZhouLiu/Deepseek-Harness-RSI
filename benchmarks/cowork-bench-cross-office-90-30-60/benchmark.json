@@ -2,8 +2,8 @@
   "apiVersion": "harness-rsi/v1alpha1",
   "kind": "Benchmark",
   "metadata": {
-    "id": "cowork-bench-240-v0.4",
-    "name": "CoworkEvoBench 240 full GRHS benchmark"
+    "id": "cowork-bench-cross-office-90-30-60-v0.4",
+    "name": "CoworkEvoBench 90 feedback / 30 selection / 60 cross-office final"
   },
   "spec": {
     "source": {
@@ -16,7 +16,7 @@
       "adapter": "cowork-bench",
       "resultFormat": "harness-rsi/solver-result-jsonl-v2"
     },
-    "expectedTotal": 240,
+    "expectedTotal": 180,
     "partitions": {
       "feedback": {
         "visibility": "detailed",
@@ -152,7 +152,7 @@
       },
       "final": {
         "visibility": "sealed",
-        "expectedCount": 120,
+        "expectedCount": 60,
         "instanceIds": [
           "cowork-evo/automationbench-1202-q1-renewal-control-package",
           "cowork-evo/automationbench-4001-ap-invoice-control-package",
@@ -213,67 +213,7 @@
           "cowork-evo/officeval-059-ppt-link-in-word-application",
           "cowork-evo/officeval-078-excel-link-in-regional-deck",
           "cowork-evo/officeval-080-requirements-driven-deck-revision",
-          "cowork-evo/officeval-088-product-docs-to-analysis-package",
-          "cowork-evo/llm-docx-f6-accept-all-redlines",
-          "cowork-evo/officebench-1-15-house-creak",
-          "cowork-evo/officebench-1-15-project-report-reference",
-          "cowork-evo/officebench-1-16-random-paragraph",
-          "cowork-evo/officebench-1-19-agreement-terms",
-          "cowork-evo/officebench-2-21-bill-courses",
-          "cowork-evo/officebench-2-26-invitation-text",
-          "cowork-evo/officebench-2-26-market-analysis-text",
-          "cowork-evo/officebench-2-37-event-frequency",
-          "cowork-evo/officebench-2-39-all-emails",
-          "cowork-evo/officebench-2-39-earliest-email",
-          "cowork-evo/officebench-2-39-latest-email",
-          "cowork-evo/officebench-3-77-house-price-prediction",
-          "cowork-evo/officebench-3-91-calendar-conflicts",
-          "cowork-evo/officeval-003-coordination-minutes-audit",
-          "cowork-evo/officeval-003-meeting-content-table-ruling",
-          "cowork-evo/officeval-022-format-transfer-cover-directory",
-          "cowork-evo/officeval-029-image-to-editable-training-form",
-          "cowork-evo/officeval-033-retail-price-catalog-uplift",
-          "cowork-evo/officeval-088-product-release-dossier",
-          "cowork-evo/automationbench-4040-month-end-close-readiness-deck",
-          "cowork-evo/cowork-bench-q4-executive-briefing-package",
-          "cowork-evo/officebench-3-2-nvidia-financial-board-briefing",
-          "cowork-evo/officeval-041-note-driven-deck-audit",
-          "cowork-evo/officeval-046-image-to-editable-dual-research-diagrams",
-          "cowork-evo/officeval-063-multi-page-content-editing",
-          "cowork-evo/officeval-064-ordered-photo-layout-completion",
-          "cowork-evo/officeval-068-editable-deck-consolidation",
-          "cowork-evo/officeval-070-single-slide-layout-polishing",
-          "cowork-evo/pptarena-001-kazakh-to-english-preserve-french",
-          "cowork-evo/pptarena-014-bold-titles-except-cover",
-          "cowork-evo/pptarena-023-add-thank-you-slide",
-          "cowork-evo/pptarena-025-theme-banded-financial-table",
-          "cowork-evo/pptarena-029-column-to-pie-chart",
-          "cowork-evo/pptarena-031-fix-text-overflow",
-          "cowork-evo/pptarena-041-picture-matched-gradient-background",
-          "cowork-evo/pptarena-050-normalize-date-formats",
-          "cowork-evo/pptarena-064-okabe-ito-chart-palette",
-          "cowork-evo/pptarena-083-bibliography-from-footers",
-          "cowork-evo/theagentcompany-stock-analysis-board-deck",
-          "cowork-evo/agentcompany-respondent-format",
-          "cowork-evo/automation-budget-prep",
-          "cowork-evo/automation-cashflow",
-          "cowork-evo/cowork-bench-course-enrollment-dashboard",
-          "cowork-evo/cowork-bench-financial-audit-workbook",
-          "cowork-evo/officebench-1-5-budget-growth-forecast",
-          "cowork-evo/officeval-088-product-table",
-          "cowork-evo/sb2-debugging-01-03-lbo-repair",
-          "cowork-evo/sb2-debugging-03-03-lbo-repair",
-          "cowork-evo/sb2-financial-model-16-02-ma-valuation",
-          "cowork-evo/sb2-template-06-19-revenue-cagr",
-          "cowork-evo/spreadsheet-rl-archer-top4",
-          "cowork-evo/spreadsheet-rl-department-hours-chart",
-          "cowork-evo/spreadsheet-rl-powerquery-reshape",
-          "cowork-evo/spreadsheet-rl-square-quickbooks-master",
-          "cowork-evo/spreadsheetbench2-09-01-lbo-formula-repair",
-          "cowork-evo/workspace-admin-budget-period-audit",
-          "cowork-evo/workspace-annual-payroll-ledger-audit",
-          "cowork-evo/workspace-fashion-ops",
-          "cowork-evo/workspace-payroll-reconciliation"
+          "cowork-evo/officeval-088-product-docs-to-analysis-package"
         ]
       }
     }
