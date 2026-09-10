@@ -20,6 +20,7 @@ fi
 
 monitor_root=".rsi/monitor/${ace_run_id}-queue"
 mkdir -p "$monitor_root"
+mkdir -p .rsi/global-concurrency/solver .rsi/global-concurrency/updater
 status_log="$monitor_root/status.log"
 
 baseline_status() {
