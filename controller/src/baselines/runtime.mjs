@@ -62,6 +62,11 @@ export async function loadBaselineConfiguration(path, repositoryRoot) {
         || config.maximumConcurrentTrials < 1)) {
     throw new ProtocolError('Invalid baseline maximumConcurrentTrials')
   }
+  if (config.feedbackConcurrency !== undefined
+      && (!Number.isSafeInteger(config.feedbackConcurrency)
+        || config.feedbackConcurrency < 1 || config.feedbackConcurrency > 64)) {
+    throw new ProtocolError('Invalid baseline feedbackConcurrency')
+  }
   if (config.feedbackTraversal !== undefined
       && !['single-sample', 'full-pass'].includes(config.feedbackTraversal)) {
     throw new ProtocolError('Invalid baseline feedbackTraversal')

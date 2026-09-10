@@ -173,6 +173,57 @@ test('ACE full-pass traversal consumes every feedback task across bounded checkp
   assert.equal(visited.length, taskIds.length * 2)
 })
 
+test('ACE parallel feedback runs a frozen minibatch and merges updates deterministically', async () => {
+  const taskIds = Array.from({ length: 6 }, (_, index) => `task-${index + 1}`)
+  let active = 0
+  let maximumActive = 0
+  let materializedState
+  const runtime = {
+    initialize: async () => ({ id: 'h0' }),
+    checkBudget: async () => {},
+    reserveCandidate: async () => {},
+    selection: async () => ({ meanReward: 0.5, count: 30 }),
+    promotion: async () => true,
+    assertCandidate: async () => {},
+    generate: async ({ taskId, state }) => {
+      active += 1
+      maximumActive = Math.max(maximumActive, active)
+      await new Promise((resolve) => setImmediate(resolve))
+      active -= 1
+      return {
+        correct: true,
+        bulletIds: state.bullets.length === 0 ? [] : [state.bullets[0].id],
+        instruction: taskId,
+      }
+    },
+    reflect: async ({ generated }) => ({
+      bullet_tags: generated.bulletIds.map((id) => ({ id, tag: 'helpful' })),
+    }),
+    curate: async ({ generated }) => ({
+      operations: [{ type: 'ADD', section: 'OTHERS', content: generated.instruction }],
+    }),
+    materializePlaybook: async ({ state }) => {
+      materializedState = state
+      return { id: 'c1' }
+    },
+    checkpoint: async () => {},
+    freeze: async ({ champion }) => ({ championId: champion.id }),
+  }
+  const result = await runBaseline({
+    method: 'ace',
+    budget: 1,
+    feedbackIds: taskIds,
+    feedbackTraversal: 'full-pass',
+    feedbackConcurrency: 3,
+    runtime,
+  })
+  assert.equal(maximumActive, 3)
+  assert.deepEqual(materializedState.bullets.map((bullet) => bullet.content), taskIds)
+  assert.equal(new Set(materializedState.bullets.map((bullet) => bullet.id)).size, taskIds.length)
+  assert.equal(materializedState.bullets[0].helpful, 3)
+  assert.match(result.methodVariant, /minibatch feedback concurrency=3/u)
+})
+
 test('candidate reservation is charged before a proposal and exhaustion freezes champion', async () => {
   const { runtime, seen } = fakeRuntime([0.5, 0.7])
   const evolve = runtime.evolve

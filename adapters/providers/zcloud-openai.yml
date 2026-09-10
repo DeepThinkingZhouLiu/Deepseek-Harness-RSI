@@ -29,3 +29,5 @@ spec:
     # Office 任务需要读取渲染图片时，使用 ZCloud 提供的视觉模型。
     - id: qwen3-vl-flash
       name: Qwen3 VL Flash
+    - id: qwen3.8-max
+      name: Qwen3.8 Max

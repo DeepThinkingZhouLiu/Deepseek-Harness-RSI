@@ -35,10 +35,13 @@ export async function runBaseline({
   runtime,
   maximumReflectionRounds = 3,
   feedbackTraversal = 'single-sample',
+  feedbackConcurrency = 1,
 }) {
   if (!Number.isSafeInteger(budget) || budget < 1 || !Array.isArray(feedbackIds)
       || feedbackIds.length === 0 || new Set(feedbackIds).size !== feedbackIds.length
-      || !['single-sample', 'full-pass'].includes(feedbackTraversal)) {
+      || !['single-sample', 'full-pass'].includes(feedbackTraversal)
+      || !Number.isSafeInteger(feedbackConcurrency) || feedbackConcurrency < 1
+      || feedbackConcurrency > 64) {
     throw new ProtocolError('Invalid baseline configuration')
   }
   const method = getBaselineMethod(methodId)
@@ -70,6 +73,7 @@ export async function runBaseline({
         history: structuredClone(history),
         maximumReflectionRounds,
         feedbackTraversal,
+        feedbackConcurrency,
       })
       methodState = proposed.state
       const { candidate, report } = proposed
@@ -108,7 +112,9 @@ export async function runBaseline({
   const frozen = await runtime.freeze({ champion, h0, current, history })
   return {
     method: methodId,
-    methodVariant: method.variant,
+    methodVariant: feedbackConcurrency === 1 || methodId !== 'ace'
+      ? method.variant
+      : `${method.variant}; deterministic minibatch feedback concurrency=${feedbackConcurrency}`,
     frozen,
     baselineSelection,
     championSelection,

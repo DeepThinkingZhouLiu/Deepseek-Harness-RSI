@@ -89,6 +89,7 @@ if (command === 'check') {
       ([key, rows]) => [key, rows.length],
     )),
     budget: bundle.config.candidateBudget,
+    feedbackConcurrency: bundle.config.feedbackConcurrency ?? 1,
     source: bundle.sources[bundle.config.method],
   }, null, 2))
 } else {
@@ -150,6 +151,7 @@ if (command === 'check') {
         budget: bundle.config.candidateBudget,
         maximumReflectionRounds: bundle.config.maximumReflectionRounds,
         feedbackTraversal: bundle.config.feedbackTraversal,
+        feedbackConcurrency: bundle.config.feedbackConcurrency ?? 1,
         feedbackIds,
         runtime,
       })
