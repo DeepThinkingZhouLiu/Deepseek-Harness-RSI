@@ -275,6 +275,10 @@ Controller 生成 MutationLease，不靠 Prompt 软约束。
 
 ## 启动与产物
 
+CoworkEvoBench 90/30/60 的本地 Docker 环境、Benchmark 拉取、路径配置以及
+ACE/GRHS/Evo-Bench 完整命令见
+[`docs/cowork-90-30-60-local-docker.zh.md`](docs/cowork-90-30-60-local-docker.zh.md)。
+
 先做静态校验：
 
 ```bash
