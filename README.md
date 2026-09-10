@@ -2,6 +2,9 @@
 
 English | [中文](README.zh.md)
 
+Optional [ACE and Evo-Bench Evolver baselines](baselines/README.md) are isolated
+from the existing recipes and use a dedicated runner and method registry.
+
 An executable Harness self-evolution platform that configures **what to evolve**,
 **where to evaluate it**, and **how to search** as independent components. The
 same trusted Controller can now combine an MSA Minimal Target with either a real

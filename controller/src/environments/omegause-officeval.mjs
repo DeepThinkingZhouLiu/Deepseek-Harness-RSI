@@ -786,6 +786,7 @@ export class OmegaUseOfficeValEnvironment {
       latencyMs: Date.now() - startedAt,
       inputTokens: solver.modelUsage?.complete ? solver.modelUsage.inputTokens : null,
       outputTokens: solver.modelUsage?.complete ? solver.modelUsage.outputTokens : null,
+      solverTrace: solver.trace ?? null,
       solverAnswer: solver.answer,
       verifierFeedback: feedback,
       policyViolations: policyViolation ? [policyViolation] : [],

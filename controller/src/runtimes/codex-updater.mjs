@@ -9,6 +9,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { setTimeout as delay } from 'node:timers/promises'
 
 import { validateModelGatewayEnvironment } from '../cowork-model-gateway.mjs'
 import { MODEL_GATEWAY_RELAY_URL } from '../model-gateway-relay.mjs'
@@ -112,9 +113,11 @@ export function createCodexUpdaterDriver({
       const socketPath = join(shortRunRoot, 'model-gateway.sock')
       const uid = process.getuid?.()
       const gid = process.getgid?.()
-      if (!Number.isInteger(uid) || uid < 1 || !Number.isInteger(gid) || gid < 1) {
-        throw new ProtocolError('Codex Updater 拒绝以 root 或未知宿主身份运行')
+      if (!Number.isInteger(uid) || uid < 0 || !Number.isInteger(gid) || gid < 0
+          || (uid === 0) !== (gid === 0)) {
+        throw new ProtocolError('Codex Updater 宿主身份无效')
       }
+      const privilegedHost = uid === 0
 
       let gateway
       let result
@@ -146,6 +149,7 @@ export function createCodexUpdaterDriver({
           updaterModel: options.model.model,
           updaterReasoningEffort: options.model.reasoningEffort ?? 'high',
           candidateRoot: options.candidateWorkspace,
+          candidateReadOnly: options.candidateReadOnly ?? false,
           gitRoot,
           runRoot: shortRunRoot,
           runtimePatch: join(repositoryRoot, 'controller/src/codex-updater.runtime-placeholder'),
@@ -153,7 +157,7 @@ export function createCodexUpdaterDriver({
           gatewayUrl: gateway.url,
           gatewaySocketPath: gateway.socketPath,
           gatewayDummyKey: dummyKey,
-          prompt: cliUpdaterTask({
+          prompt: options.sessionTask ?? cliUpdaterTask({
             targetId: options.targetId,
             mutationLevel: options.mutationLevel,
             reportName,
@@ -167,9 +171,10 @@ export function createCodexUpdaterDriver({
           peerLogs: [],
           bwrapPath: updater.runtime.bwrapPath,
           setprivPath: updater.runtime.setprivPath,
-          // 本 Driver 在普通宿主用户下运行，setgroups 对非 root 不可用；
-          // UID/GID 已核验为当前身份，保留附加组不扩大空根 Bubblewrap 的挂载边界。
-          preserveSupplementaryGroups: true,
+          // 普通用户先经 setpriv 保持当前身份；root 宿主直接创建 mount/network
+          // namespace，再由 Bubblewrap 在进入 Updater 前丢弃全部 capabilities。
+          preserveSupplementaryGroups: !privilegedHost,
+          privilegedHost,
           baseEnv: {
             PATH: '/usr/local/bin:/usr/bin:/bin',
             LANG: 'C.UTF-8',
@@ -177,12 +182,18 @@ export function createCodexUpdaterDriver({
             TZ: 'UTC',
           },
         })
-        result = await execute({
-          ...invocation,
-          timeoutMs: options.timeoutMs,
-          outputLimitBytes: 16 * 1024 * 1024,
-          secretValues: [apiKey, dummyKey],
-        })
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          result = await execute({
+            ...invocation,
+            timeoutMs: options.timeoutMs,
+            outputLimitBytes: 16 * 1024 * 1024,
+            secretValues: [apiKey, dummyKey],
+          })
+          const namespaceExhausted = !result.ok
+            && /bwrap: Creating new namespace failed:[\s\S]*ENOSPC/iu.test(result.stderr)
+          if (!namespaceExhausted || attempt === 3) break
+          await delay(2_000 * attempt)
+        }
         if (!result.ok) {
           const error = new ProtocolError('Codex Updater 执行失败', [
             result.timedOut ? 'reason=timeout' : `exitCode=${result.exitCode}`,

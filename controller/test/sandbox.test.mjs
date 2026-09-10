@@ -173,6 +173,60 @@ test('generic sandbox can provide an empty proc directory for restricted kernels
   }), ProtocolError)
 })
 
+test('root host can create the same boundary without a user namespace', () => {
+  if (process.getuid?.() !== 0 || process.getgid?.() !== 0) return
+  const result = buildBubblewrapInvocation({
+    invocation: { command: '/usr/bin/true', args: [], cwd: '/work', env: {} },
+    uid: 0,
+    gid: 0,
+    privilegedHost: true,
+    network: 'shared',
+    mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
+  })
+  assert.equal(result.command, '/usr/bin/bwrap')
+  assert.equal(result.args.includes('--unshare-user'), false)
+  assert.equal(includesSequence(result.args, ['--cap-drop', 'ALL']), true)
+  assert.equal(result.args.includes('--unshare-net'), false)
+  assert.equal(result.args.includes('--uid'), false)
+  assert.throws(() => buildBubblewrapInvocation({
+    invocation: { command: '/usr/bin/true', args: [], cwd: '/work', env: {} },
+    uid: 1001,
+    gid: 1001,
+    privilegedHost: true,
+    mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
+  }), /root 宿主/u)
+})
+
+test('root host creates an empty network namespace before Bubblewrap', () => {
+  if (process.getuid?.() !== 0 || process.getgid?.() !== 0) return
+  const result = buildBubblewrapInvocation({
+    invocation: { command: '/usr/bin/true', args: [], cwd: '/work', env: {} },
+    uid: 0,
+    gid: 0,
+    privilegedHost: true,
+    network: 'none',
+    mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
+  })
+  assert.equal(result.command, '/usr/bin/unshare')
+  assert.deepEqual(result.args.slice(0, 2), ['--net', '/usr/bin/bwrap'])
+  assert.equal(result.args.includes('--unshare-net'), false)
+  assert.equal(includesSequence(result.args, ['--cap-drop', 'ALL']), true)
+})
+
+test('sandbox can expose the read-only DSW loader required by /usr/local Node', () => {
+  const result = buildBubblewrapInvocation({
+    invocation: { command: '/usr/local/bin/node', args: ['--version'], cwd: '/work', env: {} },
+    uid: 1001,
+    gid: 1001,
+    includeDswRuntimeLoader: true,
+    mounts: [{ source: '/safe/work', destination: '/work', readOnly: false }],
+  })
+  assert.equal(includesSequence(result.args, ['--dir', '/etc/dsw']), true)
+  assert.equal(includesSequence(result.args, [
+    '--ro-bind-try', '/etc/dsw/runtime', '/etc/dsw/runtime',
+  ]), true)
+})
+
 test('generic sandbox 只允许当前宿主身份保留附加组', () => {
   const uid = process.getuid?.()
   const gid = process.getgid?.()

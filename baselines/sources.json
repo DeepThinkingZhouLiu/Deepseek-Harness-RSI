@@ -1,0 +1,24 @@
+{
+  "ace": {
+    "paper": "https://arxiv.org/abs/2510.04618",
+    "repository": "https://github.com/ace-agent/ace",
+    "implementation": "ace/ace.py and playbook_utils.py",
+    "variant": "serial offline loop with curator_frequency=1 and three reflection rounds",
+    "adaptations": [
+      "The MSA artifact solver and native Cowork verifier replace the text generator and task evaluator.",
+      "Reflector and Curator run as isolated read-only Codex sessions.",
+      "The controller applies ADD operations and bullet counters to profiles/cowork.md."
+    ]
+  },
+  "evo-bench": {
+    "paper": "https://arxiv.org/abs/2608.09096",
+    "repository": "https://github.com/RUCAIBox/Evo-Bench",
+    "implementation": "evobench/evolution/harness.py and prompts.py",
+    "variant": "Cowork/Codex adaptation of the executable-harness evolution loop",
+    "adaptations": [
+      "One Codex session submits one candidate; it receives the latest validation pass plus cumulative structured history, and evaluation is synchronous.",
+      "Feedback is detailed, Selection is aggregate-only, and Final remains sealed.",
+      "The current revision continues after regressions while the best Selection checkpoint is frozen."
+    ]
+  }
+}

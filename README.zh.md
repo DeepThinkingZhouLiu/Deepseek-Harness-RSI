@@ -1,5 +1,8 @@
 # HarnessEvoGym
 
+[ACE 与 Evo-Bench Evolver baseline](baselines/README.md) 以独立方法注册表和专用运行器
+接入，不改变现有 recipes、实验配置或主 Controller CLI。
+
 [English](README.md) | 中文
 
 一个把 **“优化谁”、“在哪里做题”、“怎么进化”** 拆开配置的 Harness

@@ -116,6 +116,41 @@ test('single updater call gets one writable worktree and read-only feedback', ()
   assert.equal(invocation.args[preset + 1], 'standard')
 })
 
+test('root updater keeps Bubblewrap confinement and uses the Unix relay on host network', () => {
+  if (process.getuid?.() !== 0 || process.getgid?.() !== 0) return
+  const invocation = buildUpdaterInvocation({
+    ...invocationOptions(),
+    uid: 0,
+    gid: 0,
+    privilegedHost: true,
+    gatewaySocketPath: '/srv/updater-run/model-gateway.sock',
+  })
+  assert.equal(invocation.command, '/usr/bin/bwrap')
+  assert.equal(invocation.args.includes('--unshare-net'), false)
+  assert.equal(invocation.args.includes('--unshare-user'), false)
+  assert.equal(includesSequence(invocation.args, ['--cap-drop', 'ALL']), true)
+})
+
+test('updater mounts the DSW runtime loader only for /usr/local Node', () => {
+  const invocation = buildUpdaterInvocation({
+    ...invocationOptions(),
+    nodeBinary: '/usr/local/bin/node',
+  })
+  assert.equal(includesSequence(invocation.args, [
+    '--ro-bind-try', '/etc/dsw/runtime', '/etc/dsw/runtime',
+  ]), true)
+  assert.equal(buildUpdaterInvocation(invocationOptions()).args.includes('/etc/dsw/runtime'), false)
+})
+
+test('analysis-only updater call mounts the candidate read-only', () => {
+  const invocation = buildUpdaterInvocation({ ...invocationOptions(), candidateReadOnly: true })
+  assert.equal(mountMode(
+    invocation.args,
+    '/srv/candidate',
+    UPDATER_SANDBOX_PATHS.candidate,
+  ), '--ro-bind')
+})
+
 test('peer histories are mounted read-only at stable branch paths', () => {
   const options = invocationOptions()
   options.peerLogs = [{

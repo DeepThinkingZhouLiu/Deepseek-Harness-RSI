@@ -1,0 +1,24 @@
+{
+  "apiVersion": "harness-rsi/v1alpha1",
+  "kind": "BaselineExperiment",
+  "method": "ace",
+  "policy": "evaluation/policies/cowork-bench-full-rsi.json",
+  "benchmark": "benchmarks/cowork-bench-xlsx60/benchmark.json",
+  "candidateBudget": 4,
+  "maximumConcurrentTrials": 4,
+  "seed": 20260907,
+  "maximumReflectionRounds": 3,
+  "maximumUpdaterRequests": 1024,
+  "maximumSolverRequests": 32768,
+  "maximumWallSeconds": 172800,
+  "adapters": {
+    "target": "adapters/targets/msa-minimal-cowork-rsi.yml",
+    "updater": "adapters/updaters/codex-cli.yml",
+    "provider": "adapters/providers/zcloud-openai.yml",
+    "infrastructure": "environments/cowork-bench-agentbay.yml"
+  },
+  "models": {
+    "solver": { "provider": "zcloud-openai", "model": "gpt-5.6-terra", "maxTokens": 65536, "reasoningEffort": "high" },
+    "updater": { "provider": "zcloud-openai", "model": "gpt-5.6-terra", "maxTokens": 65536, "reasoningEffort": "high" }
+  }
+}
