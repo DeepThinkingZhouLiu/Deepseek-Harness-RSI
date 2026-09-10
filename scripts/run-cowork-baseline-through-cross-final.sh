@@ -2,17 +2,19 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 --config <ppt-baseline.json> --run-id <id> --cross-target <baseline.json> [--cross-target ...]"
+  echo "usage: $0 --config <ppt-baseline.json> --run-id <id> --cross-target <baseline.json> [--cross-target ...] [--restart-h0-with-config-change]"
 }
 
 source_config=""
 run_id=""
 cross_targets=()
+restart_h0_with_config_change=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config) source_config="$2"; shift 2 ;;
     --run-id) run_id="$2"; shift 2 ;;
     --cross-target) cross_targets+=("$2"); shift 2 ;;
+    --restart-h0-with-config-change) restart_h0_with_config_change=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -30,7 +32,11 @@ run_root=".rsi/baselines/$run_id"
 
 if [[ ! -f "$run_root/frozen.json" ]]; then
   if [[ -e "$run_root" ]]; then
-    "${runner[@]}" run --resume-h0 --experiment "$source_config" --run-id "$run_id"
+    resume_args=(run --resume-h0 --experiment "$source_config" --run-id "$run_id")
+    if [[ "$restart_h0_with_config_change" == true ]]; then
+      resume_args+=(--restart-h0-with-config-change)
+    fi
+    "${runner[@]}" "${resume_args[@]}"
   else
     "${runner[@]}" run --experiment "$source_config" --run-id "$run_id"
   fi

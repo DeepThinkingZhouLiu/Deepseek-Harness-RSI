@@ -249,7 +249,7 @@ test('release adapter uses the canonical 90/30/120 benchmark contract', async ()
     'benchmarks/cowork-bench-240/benchmark.json',
   )
   assert.deepEqual(Object.values(release.partitions).map((rows) => rows.length), [90, 30, 120])
-  assert.equal(release.id, 'cowork-bench-240-v0.2')
+  assert.equal(release.id, 'cowork-bench-240-v0.4')
 })
 
 test('sealed task cannot run before Final authorization', async () => {

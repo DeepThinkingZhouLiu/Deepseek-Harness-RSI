@@ -28,7 +28,15 @@ function shuffled(values, seed) {
   return result
 }
 
-async function quarantinePartialH0Work(runRoot) {
+function compatiblePreIterationRestart(previous, next) {
+  const mutable = new Set(['candidateBudget', 'feedbackConcurrency'])
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)])
+  return previous.method === 'ace' && next.method === 'ace'
+    && [...keys].every((key) => mutable.has(key)
+      || JSON.stringify(previous[key]) === JSON.stringify(next[key]))
+}
+
+async function quarantinePartialH0Work(runRoot, restart = null) {
   const recoveryRoot = join(
     runRoot,
     'recovery/h0-resume',
@@ -45,11 +53,22 @@ async function quarantinePartialH0Work(runRoot) {
       moves.push(['trials', entry.name])
     }
   }
-  if (moves.length === 0) return
+  const rootEntries = new Set(await readdir(runRoot))
+  for (const name of ['budget.json', 'usage.json', 'run-usage.json']) {
+    if (rootEntries.has(name)) moves.push([null, name])
+  }
+  if (moves.length === 0 && restart === null) return
   await mkdir(recoveryRoot, { recursive: true, mode: 0o700 })
   for (const [group, name] of moves) {
-    await mkdir(join(recoveryRoot, group), { recursive: true, mode: 0o700 })
-    await rename(join(runRoot, group, name), join(recoveryRoot, group, name))
+    const destination = group === null ? recoveryRoot : join(recoveryRoot, group)
+    await mkdir(destination, { recursive: true, mode: 0o700 })
+    await rename(
+      group === null ? join(runRoot, name) : join(runRoot, group, name),
+      join(destination, name),
+    )
+  }
+  if (restart !== null) {
+    await writeJsonFile(join(recoveryRoot, 'restart.json'), restart)
   }
 }
 
@@ -60,6 +79,7 @@ const { positionals, values } = parseArgs({
     'run-id': { type: 'string' },
     'source-run-id': { type: 'string' },
     'resume-h0': { type: 'boolean' },
+    'restart-h0-with-config-change': { type: 'boolean' },
   },
 })
 const command = positionals[0] ?? 'check'
@@ -118,12 +138,20 @@ if (command === 'check') {
     if (values['resume-h0']) {
       const existingConfig = JSON.parse(await readFile(join(runRoot, 'experiment.json'), 'utf8'))
       const entries = await readdir(runRoot)
-      if (JSON.stringify(existingConfig) !== JSON.stringify(bundle.config)
+      const changed = JSON.stringify(existingConfig) !== JSON.stringify(bundle.config)
+      if ((changed && (!values['restart-h0-with-config-change']
+            || !compatiblePreIterationRestart(existingConfig, bundle.config)))
           || entries.includes('frozen.json')
           || entries.some((entry) => /^checkpoint-[0-9]+\.json$/u.test(entry))) {
         throw new ProtocolError('--resume-h0 only accepts the original pre-iteration run')
       }
-      await quarantinePartialH0Work(runRoot)
+      await quarantinePartialH0Work(runRoot, changed ? {
+        reason: 'replace ACE candidate budget before the first completed iteration',
+        previousExperiment: existingConfig,
+        replacementExperiment: bundle.config,
+        restartedAt: new Date().toISOString(),
+      } : null)
+      if (changed) await writeJsonFile(join(runRoot, 'experiment.json'), bundle.config)
     } else {
       await mkdir(runRoot, { recursive: false, mode: 0o700 })
     }
