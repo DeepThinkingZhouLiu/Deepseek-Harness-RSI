@@ -1,0 +1,101 @@
+{
+  "apiVersion": "harness-rsi/v1alpha1",
+  "kind": "Benchmark",
+  "metadata": {
+    "id": "cowork-bench-docx60-v0.2",
+    "name": "CoworkBench all 60 DOCX tasks, original partitions"
+  },
+  "spec": {
+    "source": {
+      "adapter": "cowork-bench",
+      "dataset": "DeepThinkingZhouLiu/cowork-evolution-benchmark",
+      "split": "benchmarks/cowork-evo-240-v0.2",
+      "revision": "aac0f28d4596eefbc50041b54ba3bbadf59d6f1b"
+    },
+    "evaluator": {
+      "adapter": "cowork-bench",
+      "resultFormat": "harness-rsi/solver-result-jsonl-v2"
+    },
+    "expectedTotal": 60,
+    "partitions": {
+      "feedback": {
+        "visibility": "detailed",
+        "expectedCount": 30,
+        "instanceIds": [
+          "cowork-evo/cowork-bench-rzd-trip-plan-from-outline",
+          "cowork-evo/forte-legal-020-power-of-attorney-risk-report",
+          "cowork-evo/llm-docx-d3-plain-english-closing-conditions",
+          "cowork-evo/llm-docx-s4-revise-memo-meeting-notes",
+          "cowork-evo/officebench-1-12-class-roster-counts",
+          "cowork-evo/officebench-1-12-final-pass-count",
+          "cowork-evo/officebench-1-12-xihozun-hw2",
+          "cowork-evo/officebench-1-13-cs-transfer-eligibility",
+          "cowork-evo/officebench-1-13-cs161-prerequisites",
+          "cowork-evo/officebench-1-19-paper-abstract",
+          "cowork-evo/officebench-1-19-paper-metadata",
+          "cowork-evo/officebench-1-3-rename-docx",
+          "cowork-evo/officebench-2-18-highest-score-statement",
+          "cowork-evo/officebench-2-18-homework-assignment",
+          "cowork-evo/officebench-2-18-shopping-list",
+          "cowork-evo/officebench-2-19-teaching-report",
+          "cowork-evo/officebench-2-20-all-cs161",
+          "cowork-evo/officebench-2-20-cs-major-list",
+          "cowork-evo/officebench-2-20-final-perfect",
+          "cowork-evo/officebench-2-30-rename-student-id",
+          "cowork-evo/officebench-2-6-homework-ocr",
+          "cowork-evo/officebench-3-22-homework-folder",
+          "cowork-evo/officebench-3-56-class-homework",
+          "cowork-evo/officebench-3-58-shopping-docx",
+          "cowork-evo/officebench-3-84-sleep-analysis",
+          "cowork-evo/officeval-006-pdf-to-editable-math-template",
+          "cowork-evo/officeval-018-report-formatting-fidelity",
+          "cowork-evo/officeval-029-image-to-editable-training-form",
+          "cowork-evo/officeval-036-pdf-statement-to-word-table",
+          "cowork-evo/officeval-040-advanced-formatting-and-watermark"
+        ]
+      },
+      "selection": {
+        "visibility": "aggregate-only",
+        "expectedCount": 10,
+        "instanceIds": [
+          "cowork-evo/officebench-1-15-syllabus-integrity",
+          "cowork-evo/officebench-2-2-concert-address",
+          "cowork-evo/officebench-2-2-concert-contact",
+          "cowork-evo/officebench-2-22-house-index-report",
+          "cowork-evo/officebench-2-36-grade-report",
+          "cowork-evo/officebench-2-7-paper-summary",
+          "cowork-evo/officebench-3-60-cs161-folder",
+          "cowork-evo/officebench-3-8-progress-count",
+          "cowork-evo/officeval-003-meeting-content-table-ruling",
+          "cowork-evo/officeval-010-editable-technical-roadmap-reconstruction"
+        ]
+      },
+      "final": {
+        "visibility": "sealed",
+        "expectedCount": 20,
+        "instanceIds": [
+          "cowork-evo/llm-docx-f6-accept-all-redlines",
+          "cowork-evo/officebench-1-15-house-creak",
+          "cowork-evo/officebench-1-15-project-report-reference",
+          "cowork-evo/officebench-1-16-random-paragraph",
+          "cowork-evo/officebench-1-16-test-sentence",
+          "cowork-evo/officebench-1-19-agreement-terms",
+          "cowork-evo/officebench-2-21-bill-courses",
+          "cowork-evo/officebench-2-22-midterm-report",
+          "cowork-evo/officebench-2-26-invitation-text",
+          "cowork-evo/officebench-2-26-market-analysis-text",
+          "cowork-evo/officebench-2-37-event-frequency",
+          "cowork-evo/officebench-2-39-all-emails",
+          "cowork-evo/officebench-2-39-earliest-email",
+          "cowork-evo/officebench-2-39-latest-email",
+          "cowork-evo/officebench-3-63-score-report-folder",
+          "cowork-evo/officebench-3-77-house-price-prediction",
+          "cowork-evo/officebench-3-82-top-five",
+          "cowork-evo/officebench-3-91-calendar-conflicts",
+          "cowork-evo/officeval-022-format-transfer-cover-directory",
+          "cowork-evo/officeval-033-retail-price-catalog-uplift"
+        ]
+      }
+    }
+  }
+}

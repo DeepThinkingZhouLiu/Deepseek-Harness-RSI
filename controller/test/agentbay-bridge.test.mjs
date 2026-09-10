@@ -8,6 +8,71 @@ import { promisify } from 'node:util'
 const execFileAsync = promisify(execFile)
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
+test('AgentBay retries file transfers and preserves results after exhausted downloads', async () => {
+  const script = String.raw`
+import importlib.util, threading, tempfile, types
+spec = importlib.util.spec_from_file_location("bridge", "scripts/agentbay-docker-bridge.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.time.sleep = lambda delay: None
+b = object.__new__(module.Bridge)
+b._control_plane_lock = threading.Lock()
+calls = []
+def transfer(**kwargs):
+    calls.append(kwargs)
+    return types.SimpleNamespace(success=len(calls) == 3, error_message="SSL EOF")
+assert b._transfer_file(transfer, remote_path="/result").success
+assert len(calls) == 3
+b.remote_root = "/remote-test"
+b._checked = lambda *args: None
+b.session = types.SimpleNamespace(session_id="test-session", file_system=types.SimpleNamespace(
+    download_file=lambda **kwargs: types.SimpleNamespace(success=False, error_message="SSL EOF")))
+with tempfile.TemporaryDirectory() as directory:
+    try:
+        b.download_archive("/result", directory)
+        raise AssertionError("download should fail")
+    except RuntimeError as error:
+        assert "retained session=test-session" in str(error)
+assert b._retain_results
+b.keepalive_stop = threading.Event()
+b.keepalive = types.SimpleNamespace(join=lambda **kwargs: None)
+b.close()
+print("ok")
+`
+  const { stdout } = await execFileAsync('python3', ['-c', script], { cwd: repositoryRoot, timeout: 10_000 })
+  assert.equal(stdout.trim(), 'ok')
+})
+
+test('AgentBay bridge serves 200 concurrent requests in one bridge', async () => {
+  const script = String.raw`
+import importlib.util
+import io
+import json
+import threading
+spec = importlib.util.spec_from_file_location("bridge", "scripts/agentbay-docker-bridge.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+barrier = threading.Barrier(200, timeout=10)
+class Bridge:
+    def request(self, request):
+        barrier.wait()
+        return request["id"]
+responses = []
+module.serve_requests(Bridge(), io.StringIO("".join(
+    json.dumps({"id": i}) + "\n" for i in range(200)
+)), responses.append)
+assert len(responses) == 200
+assert all("error" not in result for result in responses), responses
+assert sorted(result["result"] for result in responses) == list(range(200))
+print("ok")
+`
+  const { stdout } = await execFileAsync('python3', ['-c', script], {
+    cwd: repositoryRoot,
+    timeout: 20_000,
+  })
+  assert.equal(stdout.trim(), 'ok')
+})
+
 test('AgentBay bridge 串行控制面调用并并发处理已提交请求', async () => {
   const script = String.raw`
 import importlib.util

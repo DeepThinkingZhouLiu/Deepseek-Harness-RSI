@@ -4,7 +4,8 @@ import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const MODEL_GATEWAY_RELAY_PORT = 43119
-export const MODEL_GATEWAY_RELAY_URL = `http://127.0.0.1:${MODEL_GATEWAY_RELAY_PORT}/v1`
+export const MODEL_GATEWAY_RELAY_ORIGIN = `http://127.0.0.1:${MODEL_GATEWAY_RELAY_PORT}`
+export const MODEL_GATEWAY_RELAY_URL = `${MODEL_GATEWAY_RELAY_ORIGIN}/v1`
 
 const MAXIMUM_SOCKET_PATH_BYTES = 100
 const HOP_BY_HOP_HEADERS = new Set([
@@ -128,36 +129,6 @@ export function relayWrappedInvocation({ invocation, nodePath, relayPath, socket
     ...invocation,
     command: resolve(nodePath),
     args: [resolve(relayPath), validateSocketPath(socketPath), invocation.command, ...invocation.args],
-  }
-}
-
-const SOCAT_RELAY_SCRIPT = [
-  'set -eu',
-  `/usr/bin/socat TCP4-LISTEN:${MODEL_GATEWAY_RELAY_PORT},bind=127.0.0.1,reuseaddr,fork UNIX-CONNECT:"$RSI_MODEL_GATEWAY_SOCKET" &`,
-  'relay_pid=$!',
-  'trap \'kill "$relay_pid" 2>/dev/null || true; wait "$relay_pid" 2>/dev/null || true\' EXIT HUP INT TERM',
-  '/usr/bin/sleep 0.1',
-  'set +e',
-  '"$@"',
-  'child_status=$?',
-  'set -e',
-  'kill "$relay_pid" 2>/dev/null || true',
-  'wait "$relay_pid" 2>/dev/null || true',
-  'trap - EXIT HUP INT TERM',
-  'exit "$child_status"',
-].join('\n')
-
-/** Wrap a static native child without importing the host Node runtime. */
-export function socatRelayWrappedInvocation({ invocation, socketPath }) {
-  const childInvocation = validateChild(invocation?.command, invocation?.args)
-  if (typeof invocation?.cwd !== 'string' || !invocation.env || typeof invocation.env !== 'object') {
-    throw protocolFailure('relay invocation is invalid')
-  }
-  return {
-    ...invocation,
-    command: '/bin/sh',
-    args: ['-c', SOCAT_RELAY_SCRIPT, 'harness-rsi-relay', childInvocation.command, ...childInvocation.args],
-    env: { ...invocation.env, RSI_MODEL_GATEWAY_SOCKET: validateSocketPath(socketPath) },
   }
 }
 

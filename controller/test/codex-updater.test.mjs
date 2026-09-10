@@ -152,14 +152,11 @@ test('Codex Updater 固定 distribution，通过 Responses Gateway 隔离修改 
     assert.equal(invocation.env.PYTHONDONTWRITEBYTECODE, '1')
     assert.equal(invocation.env.PYTHONPYCACHEPREFIX, '/work/tmp/python-cache')
     if (process.getuid?.() === 0) {
-      // Root launchers use the attested bubblewrap boundary directly. A
-      // fresh network namespace is unavailable on hosts without CAP_NET_ADMIN.
-      assert.equal(invocation.command, '/usr/bin/bwrap')
-      assert.equal(invocation.args[0], '--die-with-parent')
+      assert.equal(invocation.command, '/usr/bin/unshare')
+      assert.deepEqual(invocation.args.slice(0, 2), ['--net', '/usr/bin/bwrap'])
       assert.equal(invocation.args.includes('--unshare-net'), false)
-      assert.ok(invocation.args.includes('--clear-groups'))
       assert.equal(invocation.args.includes('--unshare-user'), false)
-      assert.ok(invocation.args.includes('--bounding-set=-all'))
+      assert.ok(invocation.args.includes('--cap-drop'))
     } else {
       assert.ok(invocation.args.includes('--unshare-net'))
       assert.ok(invocation.args.includes('--keep-groups'))

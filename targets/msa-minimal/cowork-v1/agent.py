@@ -7,6 +7,13 @@ import os
 import re
 from pathlib import Path
 
+from image_tool import (
+    ImageToolError,
+    MAX_IMAGE_BYTES,
+    MAX_IMAGE_CONTEXT_BYTES,
+    MAX_IMAGE_OBSERVATIONS,
+    read_image,
+)
 from model import query
 from tools import run_bash
 
@@ -15,23 +22,8 @@ BASH_PATTERNS = (
     re.compile(r"<bash>\s*(.*?)\s*</bash>", re.DOTALL | re.IGNORECASE),
     re.compile(r"```bash\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE),
 )
+IMAGE_PATTERN = re.compile(r"<view_image>\s*(.*?)\s*</view_image>", re.DOTALL | re.IGNORECASE)
 FINAL_PATTERN = re.compile(r"<final>\s*(.*?)\s*</final>", re.DOTALL | re.IGNORECASE)
-EXPLICIT_BASH_MARKER = re.compile(
-    r"(?:^|\n)\s*to=bash(?:\.exec)?\s+code:\s*",
-    re.IGNORECASE,
-)
-COMPLETION_PATTERN = re.compile(
-    r"\b(?:completed|created|updated|saved|deliverable)\b|已(?:完成|创建|更新|保存)|交付文件",
-    re.IGNORECASE,
-)
-REFUSAL_PATTERN = re.compile(
-    r"\b(?:unable|cannot|can't|could not)\b|无法|不能|未能",
-    re.IGNORECASE,
-)
-DELIVERABLE_SUFFIXES = {
-    ".csv", ".doc", ".docx", ".odp", ".ods", ".odt", ".pdf",
-    ".ppt", ".pptx", ".rtf", ".xls", ".xlsm", ".xlsx",
-}
 
 
 def _skill_files(root: Path) -> list[Path]:
@@ -101,6 +93,14 @@ class Agent:
             maximum_output_tokens,
         )
         self.maximum_steps = min(int(self.config["max_steps"]), maximum_steps)
+        configured_image_bytes = self.config.get("max_image_bytes", MAX_IMAGE_CONTEXT_BYTES)
+        self.maximum_image_bytes = (
+            configured_image_bytes
+            if isinstance(configured_image_bytes, int)
+            and not isinstance(configured_image_bytes, bool)
+            and 1 <= configured_image_bytes <= MAX_IMAGE_BYTES
+            else MAX_IMAGE_BYTES
+        )
         self.trace_path = trace_path
 
     def trace(self, event: dict) -> None:
@@ -108,73 +108,32 @@ class Agent:
             handle.write(json.dumps(event, ensure_ascii=False) + "\n")
 
     @staticmethod
-    def _parse_action(reply: str) -> tuple[str, str, str] | None:
-        candidates: list[tuple[int, str, str, str]] = []
-        final = FINAL_PATTERN.search(reply)
-        if final and final.group(1).strip():
-            candidates.append((final.start(), "final", final.group(1).strip(), "xml-final"))
-        for pattern in BASH_PATTERNS:
-            action = pattern.search(reply)
-            if action and action.group(1).strip():
-                dialect = "xml-bash" if action.group(0).lstrip().lower().startswith("<bash>") else "fenced-bash"
-                candidates.append((action.start(), "bash", action.group(1).strip(), dialect))
-
-        marker = EXPLICIT_BASH_MARKER.search(reply)
-        if marker and not candidates:
-            payload = reply[marker.end():].strip()
-            command = payload
-            dialect = "explicit-bash"
-            if payload.startswith("{") and payload.endswith("}"):
-                try:
-                    call = json.loads(payload)
-                except json.JSONDecodeError:
-                    call = None
-                if isinstance(call, dict) and isinstance(call.get("cmd"), str):
-                    command = call["cmd"].strip()
-                    dialect = "explicit-bash-json"
-            if command:
-                candidates.append((marker.start(), "bash", command, dialect))
-
-        if not candidates:
-            return None
-        _, kind, content, dialect = min(candidates, key=lambda item: item[0])
-        return kind, content, dialect
-
-    @staticmethod
     def parse(reply: str) -> tuple[str, str] | None:
-        parsed = Agent._parse_action(reply)
-        return None if parsed is None else parsed[:2]
-
-    @staticmethod
-    def _looks_like_bare_final(reply: str) -> bool:
-        return bool(COMPLETION_PATTERN.search(reply)) and not REFUSAL_PATTERN.search(reply)
-
-    @staticmethod
-    def _parse_failure_reason(reply: str) -> str:
-        if REFUSAL_PATTERN.search(reply):
-            return "refusal-without-action"
-        if "<bash" in reply.lower() or "to=bash" in reply.lower() or "```bash" in reply.lower():
-            return "malformed-bash-action"
-        if COMPLETION_PATTERN.search(reply):
-            return "bare-final-without-deliverable-change"
-        return "missing-action-envelope"
-
-    @staticmethod
-    def _workspace_state(workspace: Path) -> dict[str, tuple[int, int]]:
-        state = {}
-        for path in workspace.rglob("*"):
-            if path.is_file() and not path.is_symlink() and path.suffix.lower() in DELIVERABLE_SUFFIXES:
-                info = path.stat()
-                state[str(path.relative_to(workspace))] = (info.st_size, info.st_mtime_ns)
-        return state
+        actions: list[tuple[int, int, str, str]] = []
+        patterns = (
+            ("bash", BASH_PATTERNS[0]),
+            ("bash", BASH_PATTERNS[1]),
+            ("view_image", IMAGE_PATTERN),
+            ("final", FINAL_PATTERN),
+        )
+        for order, (kind, pattern) in enumerate(patterns):
+            match = pattern.search(reply)
+            if match:
+                content = match.group(1).strip()
+                if content:
+                    actions.append((match.start(), order, kind, content))
+        if not actions:
+            return None
+        _, _, kind, content = min(actions)
+        return kind, content
 
     def run(self, task: str, workspace: Path) -> str:
-        initial_workspace = self._workspace_state(workspace)
-        unparsed_streak = 0
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": task},
         ]
+        image_observations = 0
+        image_context_bytes = 0
         for step in range(1, self.maximum_steps + 1):
             reply = query(
                 self.gateway_url,
@@ -183,25 +142,19 @@ class Agent:
                 messages,
                 self.maximum_output_tokens,
             )
-            parsed_action = self._parse_action(reply)
-            deliverable_changed = self._workspace_state(workspace) != initial_workspace
-            if parsed_action is None and deliverable_changed and self._looks_like_bare_final(reply):
-                parsed_action = ("final", reply.strip(), "bare-final-after-deliverable")
-            failure_reason = None if parsed_action else self._parse_failure_reason(reply)
-            self.trace({
-                "type": "model",
-                "step": step,
-                "content": reply,
-                "parsedAction": None if parsed_action is None else parsed_action[0],
-                "parserDialect": None if parsed_action is None else parsed_action[2],
-                "parseFailureReason": failure_reason,
-            })
-            parsed = None if parsed_action is None else parsed_action[:2]
+            self.trace({"type": "model", "step": step, "content": reply})
+            parsed = self.parse(reply)
             if parsed and parsed[0] == "final":
                 return parsed[1]
-            messages.append({"role": "assistant", "content": reply})
+            # 部分兼容模型会在一次响应里输出多个动作。Controller 只执行文本中
+            # 最先出现的动作，并只把该动作写回上下文，避免模型误以为后续动作已执行。
+            assistant_content = reply
             if parsed and parsed[0] == "bash":
-                unparsed_streak = 0
+                assistant_content = f"<bash>\n{parsed[1]}\n</bash>"
+            elif parsed and parsed[0] == "view_image":
+                assistant_content = f"<view_image>{parsed[1]}</view_image>"
+            messages.append({"role": "assistant", "content": assistant_content})
+            if parsed and parsed[0] == "bash":
                 observation = run_bash(
                     parsed[1],
                     str(workspace),
@@ -218,21 +171,74 @@ class Agent:
                     "role": "user",
                     "content": f"Bash observation:\n{observation}\nContinue with one <bash> or <final> block.",
                 })
+            elif parsed and parsed[0] == "view_image":
+                requested_path = parsed[1]
+                try:
+                    if image_observations >= MAX_IMAGE_OBSERVATIONS:
+                        raise ImageToolError(
+                            f"本轮最多查看 {MAX_IMAGE_OBSERVATIONS} 张图片"
+                        )
+                    image = read_image(
+                        workspace,
+                        requested_path,
+                        maximum_bytes=self.maximum_image_bytes,
+                    )
+                    encoded_bytes = int(image["encoded_bytes"])
+                    if image_context_bytes + encoded_bytes > MAX_IMAGE_CONTEXT_BYTES:
+                        raise ImageToolError("本轮图片上下文已达到大小上限")
+                    image_observations += 1
+                    image_context_bytes += encoded_bytes
+                    self.trace({
+                        "type": "image_observation",
+                        "step": step,
+                        "path": image["path"],
+                        "mime_type": image["mime_type"],
+                        "bytes": image["bytes"],
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    f"Image observation for {image['path']} "
+                                    f"({image['mime_type']}, {image['bytes']} bytes). "
+                                    "Inspect the image and continue with exactly one "
+                                    "<bash>...</bash> or <view_image>...</view_image> "
+                                    "or <final>...</final> block."
+                                ),
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": image["data_url"],
+                                    "detail": "auto",
+                                },
+                            },
+                        ],
+                    })
+                except (ImageToolError, OSError, ValueError) as error:
+                    self.trace({
+                        "type": "image_observation",
+                        "step": step,
+                        "path": requested_path[:256],
+                        "status": "rejected",
+                        "reason": str(error),
+                    })
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"Image observation failed: {error}\n"
+                            "Use another relative PNG/JPEG/WEBP/GIF path, or continue "
+                            "with exactly one <bash>...</bash> or <final>...</final> block."
+                        ),
+                    })
             else:
-                unparsed_streak += 1
-                reason = {
-                    "refusal-without-action": "Your response refused the task without an executable action.",
-                    "malformed-bash-action": "I found Bash-like syntax, but it was not a complete supported action.",
-                    "bare-final-without-deliverable-change": "You claimed completion, but no deliverable file changed.",
-                    "missing-action-envelope": "Your response contained neither an executable Bash action nor a final answer.",
-                }[failure_reason]
                 messages.append({
                     "role": "user",
                     "content": (
-                        f"Parser failure {unparsed_streak}: {reason} "
-                        "Use one complete <bash>...</bash> block, one ```bash fenced block, "
-                        "one explicit to=bash code: action, or <final>...</final>. "
-                        "Do not repeat a prose completion claim unless the requested file exists."
+                        "Use exactly one <bash>...</bash>, "
+                        "<view_image>relative/path</view_image>, or <final>...</final> block."
                     ),
                 })
         return "The agent exhausted its step budget before completing the requested deliverable."

@@ -21,9 +21,8 @@ spec:
   task:
     workspacePath: /workspace
     environmentAssets: environments/omegause-officeval-assets
-    # The largest formal partition has 55 tasks. AgentBay control-plane launches
-    # remain serial; all launched Trial workloads may execute concurrently.
-    maximumConcurrentTrials: 55
+    # One AgentBay VM; serial control-plane launches, up to 200 concurrent trials.
+    maximumConcurrentTrials: 200
     workspaceLimits:
       maximumFiles: 10000
       maximumBytes: 1073741824
@@ -42,7 +41,7 @@ spec:
     network: bridge
     runAsCurrentUser: true
     agentBay:
-      pythonExecutable: /cpfs01/pnx/miniconda3/envs/tb2.1/bin/python
+      pythonExecutableEnvironment: HARNESS_RSI_AGENTBAY_PYTHON
       bridgePath: scripts/agentbay-docker-bridge.py
       imageIdEnvironment: HARNESS_RSI_AGENTBAY_IMAGE_ID
       policyIdEnvironment: HARNESS_RSI_AGENTBAY_POLICY_ID
@@ -60,7 +59,7 @@ spec:
     port: 8080
     egressNetwork: bridge
     maximumRequestsPerRun: 4096
-    maximumConcurrentRequests: 64
+    maximumConcurrentRequests: 200
     maximumUpstreamRetries: 5
     resources:
       cpus: 1

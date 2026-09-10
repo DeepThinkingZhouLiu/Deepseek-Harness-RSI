@@ -94,6 +94,7 @@ const responseHeaderAllowlist = new Set([
   'retry-after',
   'x-deepseek-request-id',
   'x-request-id',
+  'x-oneapi-request-id',
 ])
 
 function filteredHeaders(headers, allowlist) {
@@ -195,6 +196,7 @@ function usageSnapshot(counters = globalUsage) {
 function createSseUsageMeter(counters) {
   const decoder = new StringDecoder('utf8')
   let buffer = ''
+  let jsonBuffer = ''
   let latestUsage = null
   let completed = false
 
@@ -217,6 +219,14 @@ function createSseUsageMeter(counters) {
     completed = true
     buffer += decoder.end()
     if (buffer) inspectLine(buffer)
+    // 少数兼容上游将 JSON 标记为 SSE；按正文计量，不改变转发字节。
+    if (jsonBuffer !== null) {
+      try {
+        latestUsage = parsedUsage(JSON.parse(jsonBuffer.trimStart())?.usage) ?? latestUsage
+      } catch {
+        // 非完整 JSON 不补造 Usage，仍按未知响应记账。
+      }
+    }
     if (!latestUsage) {
       for (const counter of counters) counter.unknownUsageResponses += 1
       return
@@ -231,7 +241,13 @@ function createSseUsageMeter(counters) {
   }
 
   function inspectChunk(chunk) {
-    buffer += decoder.write(chunk)
+    const text = decoder.write(chunk)
+    buffer += text
+    if (jsonBuffer !== null) {
+      jsonBuffer += text
+      const start = jsonBuffer.trimStart()
+      if ((start && !start.startsWith('{')) || jsonBuffer.length > 4 * 1024 * 1024) jsonBuffer = null
+    }
     let newline = buffer.indexOf('\n')
     while (newline >= 0) {
       inspectLine(buffer.slice(0, newline))
@@ -297,7 +313,8 @@ function trustedRequestBody(rawBody, policy) {
   if (policy.reasoningEffort !== null) output.reasoning_effort = policy.reasoningEffort
   // 受信角色只能请求一个、必然返回 Usage 的流式 Completion。
   // 覆盖而不信任 Agent 提交的同名字段，避免放大生成数或绕过计量。
-  output.n = 1
+  // 去掉 Candidate 的 n，使用 Chat Completions 默认的单条响应。
+  delete output.n
   output.stream = true
   output.stream_options = { include_usage: true }
   return Buffer.from(JSON.stringify(output))
@@ -574,6 +591,23 @@ const server = http.createServer((request, response) => {
       }
       const upstream = transport.request(target, { method: 'POST', headers }, (upstreamResponse) => {
         const status = upstreamResponse.statusCode ?? 502
+        if (status === 403) {
+          const chunks = []
+          upstreamResponse.on('data', chunk => chunks.push(chunk))
+          upstreamResponse.once('end', () => {
+            const body = Buffer.concat(chunks)
+            let code
+            try { code = JSON.parse(body.toString('utf8')).error?.code } catch {}
+            if (code === 'pre_consume_token_quota_failed' && scheduleRetry({ 'retry-after': '5' })) return
+            usageDelegated = true
+            response.writeHead(status, filteredHeaders(upstreamResponse.headers, responseHeaderAllowlist))
+            response.end(body)
+          })
+          upstreamResponse.once('error', () => {
+            if (!scheduleRetry()) { recordUnknownUsage(); send(response, 502, { error: 'upstream_failure' }) }
+          })
+          return
+        }
         if (retryableUpstreamStatuses.has(status) && attempt <= maximumUpstreamRetries) {
           // 只有在尚未向 Agent 下发 Header/Body 时才能重试，避免重播部分 Completion。
           // 429 遵守有界 Retry-After；其余故障使用指数退避和抖动。

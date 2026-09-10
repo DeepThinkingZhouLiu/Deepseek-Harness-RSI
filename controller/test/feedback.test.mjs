@@ -23,12 +23,6 @@ function record(instanceId) {
       solverAnswer: 'answer',
       verifierFeedback: 'failed',
       errors: ['tool failed'],
-      modelTurns: 7,
-      unparsedTurns: 2,
-      parserFailureSamples: [
-        'missing-action-envelope: safe sample',
-        'bare-final-without-deliverable-change: sk-example-secret-token-123456',
-      ],
     },
   }
 }
@@ -61,12 +55,6 @@ test('Feedback Packet 只包含 feedback 案例并限制搜索历史体积', () 
   assert.deepEqual(packet.spec.cases.map((item) => item.instanceId), ['feedback-one'])
   assert.equal(packet.spec.cases[0].taskInstruction, '创建一份真实交付文件')
   assert.equal(packet.spec.cases[0].errors, 'tool failed')
-  assert.equal(packet.spec.cases[0].modelTurns, 7)
-  assert.equal(packet.spec.cases[0].unparsedTurns, 2)
-  assert.deepEqual(packet.spec.cases[0].parserFailureSamples, [
-    'missing-action-envelope: safe sample',
-    'bare-final-without-deliverable-change: [REDACTED_API_KEY]',
-  ])
   const feedbackTextBytes = ['taskInstruction', 'verifierFeedback', 'solverAnswer', 'errors']
     .reduce((sum, field) => sum + Buffer.byteLength(packet.spec.cases[0][field], 'utf8'), 0)
   assert.ok(feedbackTextBytes <= 1024)

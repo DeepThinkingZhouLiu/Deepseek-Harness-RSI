@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import test from 'node:test'
 import {
   buildModelGatewayImage,
@@ -24,8 +27,8 @@ test('Model Gateway 只把一次性令牌和内部地址交给 Agent', async () 
     },
     async connectNetwork() {},
     async containerHealth() { return 'healthy' },
-    async removeContainer() {},
-    async removeNetwork() {},
+    async removeContainer(name) { calls.push(['remove-container', name]) },
+    async removeNetwork(name) { calls.push(['remove-network', name]) },
     async containerLogs() { return { stdout: '', stderr: '' } },
     async exec(options) {
       calls.push(['exec', options])
@@ -101,6 +104,8 @@ test('Model Gateway 只把一次性令牌和内部地址交给 Agent', async () 
     assert.notEqual(renewedSolverAccess.secretEnvironment.TEST_RSI_API_KEY, expiredSolverToken)
     assert.notEqual(access.secretEnvironment.TEST_RSI_API_KEY, solverAccess.secretEnvironment.TEST_RSI_API_KEY)
     const runOptions = calls.find(([name]) => name === 'run')[1]
+    assert.ok(calls.findIndex(([name]) => name === 'remove-container') < calls.findIndex(([name]) => name === 'run'))
+    assert.ok(calls.findIndex(([name]) => name === 'remove-network') < calls.findIndex(([name]) => name === 'run'))
     assert.equal(runOptions.environment.GATEWAY_TOKEN, undefined)
     assert.equal(runOptions.environment.GATEWAY_MAX_UPSTREAM_RETRIES, '5')
     assert.equal(runOptions.secretEnvironment.GATEWAY_TOKEN.length, 64)
@@ -167,6 +172,8 @@ test('Model Gateway 并发准备只构建一次且绑定定义摘要', async () 
 
 test('Model Gateway 可复用服务文件一致的旧 v1 镜像', async () => {
   let builds = 0
+  const source = await readFile(resolve(REPOSITORY_ROOT, 'docker/model-gateway/server.mjs'))
+  let imageDigest = createHash('sha256').update(source).digest('hex')
   const docker = {
     async imageExists() { return true },
     async imageLabel(_image, label) {
@@ -174,7 +181,7 @@ test('Model Gateway 可复用服务文件一致的旧 v1 镜像', async () => {
       return null
     },
     async imageFileDigest() {
-      return 'da3e1e846e41739162cbd2d71546810b55316ba136f9d4f0034cd7809d65da49'
+      return imageDigest
     },
     async build() { builds += 1 },
   }
@@ -184,6 +191,13 @@ test('Model Gateway 可复用服务文件一致的旧 v1 镜像', async () => {
     repositoryRoot: REPOSITORY_ROOT,
   })
   assert.equal(builds, 0)
+  imageDigest = '0'.repeat(64)
+  await buildModelGatewayImage({
+    config: { image: 'gateway:legacy-test', dockerfile: 'docker/model-gateway/Dockerfile' },
+    docker,
+    repositoryRoot: REPOSITORY_ROOT,
+  })
+  assert.equal(builds, 1)
 })
 
 test('Model Gateway Usage 差分会把未知响应标成不完整', () => {
@@ -225,47 +239,6 @@ test('Model Gateway 在启动前拒绝带凭据或 Query 的上游 URL', () => {
         upstreamBaseUrlEnvironment: 'TEST_RSI_BASE_URL',
       }),
       /不能包含凭据/u,
-    )
-  } finally {
-    if (originalKey === undefined) delete process.env.TEST_RSI_API_KEY
-    else process.env.TEST_RSI_API_KEY = originalKey
-    if (originalUrl === undefined) delete process.env.TEST_RSI_BASE_URL
-    else process.env.TEST_RSI_BASE_URL = originalUrl
-  }
-})
-
-test('Model Gateway 启动错误保留为可恢复的基础设施故障', async () => {
-  const originalKey = process.env.TEST_RSI_API_KEY
-  const originalUrl = process.env.TEST_RSI_BASE_URL
-  process.env.TEST_RSI_API_KEY = 'real-provider-secret'
-  process.env.TEST_RSI_BASE_URL = 'https://provider.example/v1'
-  const gateway = new ModelGateway({
-    config: {
-      image: 'gateway:test',
-      dockerfile: 'docker/model-gateway/Dockerfile',
-      alias: 'model-gateway',
-      port: 8080,
-      egressNetwork: 'bridge',
-      upstreamApiKeyEnvironment: 'TEST_RSI_API_KEY',
-      upstreamBaseUrlEnvironment: 'TEST_RSI_BASE_URL',
-      maximumRequestsPerRun: 8,
-      maximumConcurrentRequests: 1,
-      resources: { cpus: 1, memory: '512m', pids: 128 },
-    },
-    docker: {
-      async imageExists() { return true },
-      async createNetwork() { throw new Error('remote Docker network conflict') },
-      async removeContainer() {},
-      async removeNetwork() {},
-    },
-    repositoryRoot: REPOSITORY_ROOT,
-    scopeId: 'failed-start',
-  })
-  try {
-    await assert.rejects(
-      () => gateway.access(),
-      (error) => error?.kind === 'infrastructure'
-        && /Model Gateway 启动失败/u.test(error.message),
     )
   } finally {
     if (originalKey === undefined) delete process.env.TEST_RSI_API_KEY

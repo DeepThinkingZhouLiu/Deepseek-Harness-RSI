@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import process from 'node:process'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
@@ -36,7 +36,7 @@ function resultOrThrow(result, operation, allowExitCodes = [0]) {
   if (!allowExitCodes.includes(result.exitCode)) {
     throw new ProtocolError(`AgentBay 远端 Docker ${operation} 失败`, [
       `exitCode=${result.exitCode}`,
-      (result.stderr || result.stdout || '').slice(-4000),
+      [result.stdout, result.stderr].filter(Boolean).join('\n').slice(-8000),
     ])
   }
   return { ...result, durationMs: result.durationMs ?? 0, outputTruncated: false }
@@ -141,7 +141,8 @@ function collectSecrets(secretEnvironment, inheritEnvironment) {
 }
 
 export class AgentBayDockerClient {
-  constructor({ resources, network = 'bridge', runAsCurrentUser = true, agentBay, repositoryRoot }) {
+  constructor({ resources, network = 'bridge', runAsCurrentUser = true, agentBay, repositoryRoot,
+    bridgeFactory = (options) => new AgentBayBridge(options) }) {
     if (network === 'host') throw new ProtocolError('安全策略禁止 Docker host 网络')
     this.resources = resources ?? { cpus: 2, memory: '4g', pids: 512, timeoutSeconds: 900 }
     this.network = network
@@ -155,9 +156,13 @@ export class AgentBayDockerClient {
       if (!process.env[source]) throw new ProtocolError(`缺少 AgentBay 运行时配置：${source}`)
       environment[target] = process.env[source]
     }
+    const pythonExecutable = process.env[agentBay.pythonExecutableEnvironment]
+    if (!pythonExecutable || !isAbsolute(pythonExecutable) || /[\r\n\0]/u.test(pythonExecutable)) {
+      throw new ProtocolError(`缺少或非法的 AgentBay Python 绝对路径：${agentBay.pythonExecutableEnvironment}`)
+    }
     environment.HARNESS_RSI_AGENTBAY_REGISTRY_MIRROR = agentBay.registryMirror
-    this.bridge = new AgentBayBridge({
-      pythonExecutable: agentBay.pythonExecutable,
+    this.bridge = bridgeFactory({
+      pythonExecutable,
       bridgePath: resolve(this.repositoryRoot, agentBay.bridgePath),
       environment,
     })
@@ -214,7 +219,7 @@ export class AgentBayDockerClient {
     return match[1]
   }
 
-  async build({ context, dockerfile, tag, buildArgs = {}, labels = {}, timeoutMs = 3_600_000 }) {
+  async build({ context, dockerfile, tag, buildArgs = {}, labels = {}, timeoutMs = 14_400_000 }) {
     const contextPath = resolve(context)
     const dockerfilePath = resolve(dockerfile)
     const relativeDockerfile = relative(contextPath, dockerfilePath)
@@ -225,7 +230,7 @@ export class AgentBayDockerClient {
     try {
       await this.bridge.request('uploadDir', { localPath: contextPath, remotePath: remoteContext })
       const args = ['build', '--pull=false', '--file', `${remoteContext}/${relativeDockerfile.split(sep).join('/')}`, '--tag', tag]
-      for (const [name, value] of Object.entries(buildArgs)) args.push('--build-arg', `${name}=${value}`)
+      for (const [name, value] of Object.entries({ DEBIAN_MIRROR: 'https://mirrors.tencent.com/debian', PYPI_INDEX_URL: 'https://mirrors.tencent.com/pypi/simple/', ...buildArgs })) args.push('--build-arg', `${name}=${value}`)
       for (const [name, value] of Object.entries(labels)) args.push('--label', `${name}=${assertRemoteImageLabel(value, name)}`)
       args.push(remoteContext)
       return await this.docker(args, { timeoutMs, operation: 'build' })
@@ -265,6 +270,15 @@ export class AgentBayDockerClient {
   }
 
   async removeNetwork(network) {
+    const result = await this.docker(['network', 'rm', network], { allowExitCodes: [0, 1] })
+    if (result.exitCode === 0) return result
+
+    const attached = await this.docker([
+      'network', 'inspect', '--format', '{{range .Containers}}{{.Name}}{{"\\n"}}{{end}}', network,
+    ], { allowExitCodes: [0, 1], operation: 'network inspect' })
+    for (const name of attached.stdout.split('\n').map((value) => value.trim()).filter(Boolean)) {
+      await this.removeContainer(safeDockerName(name))
+    }
     return await this.docker(['network', 'rm', network], { allowExitCodes: [0, 1] })
   }
 
@@ -314,8 +328,9 @@ export class AgentBayDockerClient {
     if (options.input !== undefined) throw new ProtocolError('AgentBay Docker MVP 尚不支持 stdin 输入')
     if (hostGateway) throw new ProtocolError('AgentBay Docker 不支持指向 Controller 宿主的 hostGateway')
     if (network === 'host') throw new ProtocolError('安全策略禁止 Docker host 网络')
-    const containerName = safeDockerName(name)
+    const containerName = safeDockerName(`${randomUUID()}-${safeDockerName(name)}`)
     const staged = []
+    const retained = new Set()
     try {
       if (runAsCurrentUser && this.identity === null) this.identity = await this.bridge.request('identity')
       for (const mount of mounts) {
@@ -356,14 +371,22 @@ export class AgentBayDockerClient {
       try {
         result = await this.docker(args, { timeoutMs, secretEnvironment: secrets, operation: 'run' })
       } finally {
+        const transferErrors = []
         for (const mount of staged.filter((value) => !value.readOnly)) {
-          await this.bridge.request('downloadDir', { remotePath: mount.remotePath, localPath: mount.source })
+          try {
+            await this.bridge.request('downloadDir', { remotePath: mount.remotePath, localPath: mount.source })
+          } catch (error) {
+            retained.add(mount.remotePath)
+            transferErrors.push(`${error.message}; remote=${mount.remotePath}; local=${mount.source}`)
+          }
         }
         await this.removeContainer(containerName).catch(() => {})
+        if (transferErrors.length) throw new ProtocolError('AgentBay output transfer failed; remote results retained', transferErrors)
       }
       return result
     } finally {
-      await Promise.all(staged.map((mount) => this.bridge.request('removePath', { remotePath: mount.remotePath }).catch(() => {})))
+      await Promise.all(staged.filter(mount => !retained.has(mount.remotePath))
+        .map((mount) => this.bridge.request('removePath', { remotePath: mount.remotePath }).catch(() => {})))
     }
   }
 }

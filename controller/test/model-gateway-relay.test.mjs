@@ -7,10 +7,10 @@ import test from 'node:test'
 
 import {
   MODEL_GATEWAY_RELAY_PORT,
+  MODEL_GATEWAY_RELAY_ORIGIN,
   MODEL_GATEWAY_RELAY_URL,
   createModelGatewayRelay,
   relayWrappedInvocation,
-  socatRelayWrappedInvocation,
 } from '../src/model-gateway-relay.mjs'
 
 function requestRelay() {
@@ -75,6 +75,7 @@ test('relay forwards the fixed loopback endpoint only through its Unix socket', 
     body: '{"input":"hello"}',
   })
   assert.equal(MODEL_GATEWAY_RELAY_URL, 'http://127.0.0.1:43119/v1')
+  assert.equal(MODEL_GATEWAY_RELAY_ORIGIN, 'http://127.0.0.1:43119')
 })
 
 test('relay wrapper preserves the original command as inert arguments', () => {
@@ -91,24 +92,4 @@ test('relay wrapper preserves the original command as inert arguments', () => {
     '/candidate/dsh',
     '--flag',
   ])
-})
-
-test('native relay wrapper passes the child only as shell positional arguments', () => {
-  const invocation = socatRelayWrappedInvocation({
-    invocation: {
-      command: '/runtime/codex',
-      args: ['prompt; touch /escaped'],
-      cwd: '/work',
-      env: {},
-    },
-    socketPath: '/gateway/gateway.sock',
-  })
-  assert.equal(invocation.command, '/bin/sh')
-  assert.deepEqual(invocation.args.slice(-3), [
-    'harness-rsi-relay',
-    '/runtime/codex',
-    'prompt; touch /escaped',
-  ])
-  assert.equal(invocation.args[1].includes('prompt; touch /escaped'), false)
-  assert.equal(invocation.env.RSI_MODEL_GATEWAY_SOCKET, '/gateway/gateway.sock')
 })

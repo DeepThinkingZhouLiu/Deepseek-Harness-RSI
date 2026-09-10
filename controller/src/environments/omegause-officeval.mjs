@@ -8,15 +8,18 @@ import {
   readFile,
   readdir,
   realpath,
+  rename,
   writeFile,
 } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 
-import { writeJsonLines } from '../candidate.mjs'
+import { copyRegularTree, writeJsonLines } from '../candidate.mjs'
 import { assertPathKind, resolveInside } from '../config.mjs'
 import { safeDockerName } from '../docker.mjs'
+import { withGlobalPermit } from '../global-concurrency.mjs'
 import { ProtocolError, validateResultRecords } from '../protocol.mjs'
 import { runProcess } from '../process.mjs'
+import { runTrialStage, trialProgress, writeTrialFailure } from '../trial-stage-runner.mjs'
 import {
   commitTrialCheckpoint,
   inspectTrialCheckpoint,
@@ -41,42 +44,6 @@ const STANDARD_PROXY_ENVIRONMENT = Object.freeze([
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
-}
-
-async function loadLocalCommittedPartition({
-  runRoot,
-  executionId,
-  candidateId,
-  partition,
-  instanceIds,
-  outputPath,
-  benchmark,
-}) {
-  const records = []
-  for (const instanceId of instanceIds) {
-    const checkpointPath = join(
-      runRoot,
-      'trials',
-      executionId,
-      safeSegment(candidateId, 'Candidate ID'),
-      partition,
-      instanceId,
-      'committed-result.json',
-    )
-    let record
-    try {
-      record = JSON.parse(await readFile(checkpointPath, 'utf8'))
-    } catch {
-      return null
-    }
-    const taskRecord = record?.spec?.record ?? record
-    if (taskRecord?.instance_id !== instanceId) return null
-    records.push(taskRecord)
-  }
-  if (records.length !== instanceIds.length) return null
-  const normalized = validateResultRecords(records, benchmark, `${candidateId}/${partition} local checkpoint`)
-  await writeJsonLines(outputPath, records)
-  return normalized
 }
 
 function object(value, label) {
@@ -297,6 +264,20 @@ function changedArtifacts(before, after) {
   return output.sort((left, right) => left.path.localeCompare(right.path))
 }
 
+export async function recoverableSolverWorkspace(previousTrialRoot, before, limits) {
+  const entries = await readdir(previousTrialRoot, { withFileTypes: true })
+  const archived = entries
+    .filter((entry) => entry.isDirectory() && /^solver-attempt-[1-5]$/u.test(entry.name))
+    .sort((left, right) => Number(right.name.slice(15)) - Number(left.name.slice(15)))
+    .map((entry) => join(previousTrialRoot, entry.name, 'workspace'))
+  for (const candidate of [join(previousTrialRoot, 'workspace'), ...archived]) {
+    const info = await lstat(candidate).catch(() => null)
+    if (!info?.isDirectory()) continue
+    if (changedArtifacts(before, await snapshotWorkspace(candidate, limits)).length > 0) return candidate
+  }
+  return null
+}
+
 function artifactPolicyViolation(artifacts, limits) {
   if (artifacts.length > limits.maximumChangedFiles) return 'solver-artifact-count'
   const bytes = artifacts
@@ -373,6 +354,13 @@ export function normalizeOmegaUseVerifierReward(result) {
   return Math.max(0, Math.min(1, total / maximum))
 }
 
+export function solverFailureAllowsArtifactEvaluation(error) {
+  if (error?.retryable !== true) return false
+  return /model gateway returned no final content/iu.test([
+    error?.message, ...(error?.details ?? []),
+  ].join('\n'))
+}
+
 function compactText(value, maximumBytes) {
   const source = String(value ?? '')
   if (Buffer.byteLength(source, 'utf8') <= maximumBytes) return source
@@ -381,30 +369,6 @@ function compactText(value, maximumBytes) {
   let text = source
   while (Buffer.byteLength(text, 'utf8') > maximum) text = text.slice(0, Math.floor(text.length * 0.9))
   return `${text}${suffix}`
-}
-
-export function summarizeSolverParserTrace(trace, maximumSamples = 3) {
-  const summary = { modelTurns: 0, unparsedTurns: 0, parserFailureSamples: [] }
-  for (const line of String(trace ?? '').split(/\r?\n/u)) {
-    if (!line.trim()) continue
-    let event
-    try {
-      event = JSON.parse(line)
-    } catch {
-      continue
-    }
-    if (event?.type !== 'model') continue
-    summary.modelTurns += 1
-    if (event.parsedAction === 'bash' || event.parsedAction === 'final') continue
-    summary.unparsedTurns += 1
-    if (summary.parserFailureSamples.length >= maximumSamples) continue
-    const reason = typeof event.parseFailureReason === 'string'
-      ? event.parseFailureReason
-      : 'parser-did-not-record-a-recognized-action'
-    const excerpt = String(event.content ?? '').replace(/\s+/gu, ' ').trim().slice(0, 240)
-    summary.parserFailureSamples.push(`${reason}: ${excerpt || '(empty response)'}`)
-  }
-  return summary
 }
 
 function verifierFeedback(result, maximumBytes) {
@@ -477,20 +441,11 @@ function recordForTask({ layout, partition, trials, runRoot, feedbackLimit }) {
     })),
   }
   if (partition === 'feedback') {
-    const parserDiagnostics = trials.reduce((summary, trial) => ({
-      modelTurns: summary.modelTurns + (trial.parserDiagnostics?.modelTurns ?? 0),
-      unparsedTurns: summary.unparsedTurns + (trial.parserDiagnostics?.unparsedTurns ?? 0),
-      parserFailureSamples: [
-        ...summary.parserFailureSamples,
-        ...(trial.parserDiagnostics?.parserFailureSamples ?? []),
-      ].slice(0, 3),
-    }), { modelTurns: 0, unparsedTurns: 0, parserFailureSamples: [] })
     record.feedback = {
       taskInstruction: compactText(layout.task.instruction, feedbackLimit),
       solverAnswer: compactText(trials.map((trial) => trial.solverAnswer).join('\n\n'), feedbackLimit),
       verifierFeedback: compactText(trials.map((trial) => trial.verifierFeedback).join('\n\n'), feedbackLimit),
       errors: [],
-      ...parserDiagnostics,
     }
   }
   return record
@@ -694,7 +649,7 @@ export class OmegaUseOfficeValEnvironment {
     return await readResult(output)
   }
 
-  async runTrial({ candidateId, candidateWorkspace, layout, model, partition, seed, trialIndex, executionId }) {
+  async runTrial({ candidateId, candidateWorkspace, layout, model, partition, seed, trialIndex, executionId, previousTrialRoot = null }) {
     const trialRoot = join(
       this.runRoot,
       'trials',
@@ -716,27 +671,71 @@ export class OmegaUseOfficeValEnvironment {
     const runtime = await this.ensureRuntime()
     const instruction = trustedTaskInstruction(layout.task, layout.inputs.map((input) => input.name))
     const startedAt = Date.now()
-    let solver
-    try {
-      solver = await this.solverDriver.run({
-        image: runtime.solverImage,
-        model,
-        candidateWorkspace,
-        taskWorkspace: workspace,
-        environmentAssets: layout.environmentAssets,
-        sessionRoot,
-        task: instruction,
-        name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-solver`,
-        timeoutMs: this.environment.docker.resources.timeoutSeconds * 1000,
-        containerWorkspace: this.environment.task.workspacePath,
+    const context = { candidateId, partition, instanceId: layout.instanceId, seed }
+    let recoveredSolver = null
+    if (previousTrialRoot && this.allowRuntimeRecovery) {
+      const oldSession = join(previousTrialRoot, 'solver-session')
+      const answer = await readFile(join(oldSession, 'answer.txt'), 'utf8').catch(error => {
+        if (error.code === 'ENOENT') return null
+        throw error
       })
-    } catch (cause) {
-      throw new ProtocolError('OmegaUse Solver 基础设施失败', [
-        cause?.message ?? String(cause),
-        ...(cause?.details ?? []),
-        `candidate=${candidateId}`,
-        `task=${layout.instanceId}`,
-      ])
+      if (answer !== null && await lstat(join(previousTrialRoot, 'submission')).catch(() => null)) {
+        await rename(workspace, join(trialRoot, 'original-inputs'))
+        await copyRegularTree(join(previousTrialRoot, 'workspace'), workspace)
+        await copyRegularTree(oldSession, sessionRoot)
+        recoveredSolver = { answer }
+        trialProgress(context, 'solver-reused')
+      } else {
+        const recoveredWorkspace = await recoverableSolverWorkspace(
+          previousTrialRoot,
+          before,
+          this.environment.task.workspaceLimits,
+        )
+        if (recoveredWorkspace !== null) {
+          await rename(workspace, join(trialRoot, 'original-inputs'))
+          await copyRegularTree(recoveredWorkspace, workspace)
+          recoveredSolver = {
+            answer: 'Solver execution ended without final text; evaluating its persisted workspace artifacts.',
+          }
+          trialProgress(context, 'solver-artifact-reused')
+        }
+      }
+    }
+    let solver = recoveredSolver
+    if (solver === null) {
+      try {
+        solver = await runTrialStage({
+          trialRoot, context, stage: 'solver',
+          maximumAttempts: this.environment.task.maximumSolverAttempts,
+          prepareRetry: async (attempt) => {
+            // 重试从冻结输入重新开始，失败工作区和轨迹完整归档。
+            const archive = join(trialRoot, `solver-attempt-${attempt}`)
+            await mkdir(archive, { mode: 0o700 })
+            for (const path of [workspace, sessionRoot]) {
+              await rename(path, join(archive, basename(path))).catch((error) => {
+                if (error.code !== 'ENOENT') throw error
+              })
+            }
+            await materializeInputs(layout, workspace)
+          },
+          operation: () => withGlobalPermit('solver', () => this.solverDriver.run({
+            image: runtime.solverImage,
+            model,
+            candidateWorkspace,
+            taskWorkspace: workspace,
+            environmentAssets: layout.environmentAssets,
+            sessionRoot,
+            task: instruction,
+            name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-solver`,
+            timeoutMs: this.environment.docker.resources.timeoutSeconds * 1000,
+            containerWorkspace: this.environment.task.workspacePath,
+          })),
+        })
+      } catch (error) {
+        if (!solverFailureAllowsArtifactEvaluation(error)) throw error
+        solver = { answer: 'Solver exhausted retries without final text; evaluating persisted workspace artifacts.' }
+        trialProgress(context, 'solver-artifact-evaluation')
+      }
     }
 
     let artifacts = []
@@ -763,22 +762,16 @@ export class OmegaUseOfficeValEnvironment {
       await mkdir(submission, { recursive: false, mode: 0o700 })
     } else {
       await materializeSubmission(workspace, artifacts, submission)
-      try {
-        result = await this.runVerifier({
+      result = await runTrialStage({
+        trialRoot, context, stage: 'verifier',
+        operation: (attempt) => this.runVerifier({
           layout,
           submission,
-          logs,
-          verifierCode,
+          logs: attempt === 1 ? logs : `${logs}-attempt-${attempt}`,
+          verifierCode: attempt === 1 ? verifierCode : `${verifierCode}-attempt-${attempt}`,
           name: `${executionId}-${candidateId}-${layout.instanceId}-${seed}-verifier`,
-        })
-      } catch (cause) {
-        throw new ProtocolError('OmegaUse Verifier 基础设施失败', [
-          cause?.message ?? String(cause),
-          ...(cause?.details ?? []),
-          `candidate=${candidateId}`,
-          `task=${layout.instanceId}`,
-        ])
-      }
+        }),
+      })
     }
     const reward = normalizeOmegaUseVerifierReward(result)
     const feedback = verifierFeedback(result, this.environment.feedback.maximumTextBytesPerCase)
@@ -793,8 +786,8 @@ export class OmegaUseOfficeValEnvironment {
       latencyMs: Date.now() - startedAt,
       inputTokens: solver.modelUsage?.complete ? solver.modelUsage.inputTokens : null,
       outputTokens: solver.modelUsage?.complete ? solver.modelUsage.outputTokens : null,
+      solverTrace: solver.trace ?? null,
       solverAnswer: solver.answer,
-      parserDiagnostics: summarizeSolverParserTrace(solver.trace),
       verifierFeedback: feedback,
       policyViolations: policyViolation ? [policyViolation] : [],
       artifacts,
@@ -822,16 +815,6 @@ export class OmegaUseOfficeValEnvironment {
     })
     await assertPathKind(candidate, `Candidate ${candidateId} Workspace`)
     const executionId = sha256(resolve(outputPath)).slice(0, 12)
-    const localCheckpoint = await loadLocalCommittedPartition({
-      runRoot: this.runRoot,
-      executionId,
-      candidateId,
-      partition,
-      instanceIds: partitionSpec.instanceIds,
-      outputPath,
-      benchmark: this.benchmark,
-    })
-    if (localCheckpoint) return localCheckpoint
     await this.ensureRuntime()
     const plans = await concurrentMap(
       partitionSpec.instanceIds,
@@ -858,6 +841,7 @@ export class OmegaUseOfficeValEnvironment {
           solver: {
             id: this.solverDriver.id,
             cacheKey: this.solverDriver.cacheKey ?? null,
+            maximumAttempts: this.environment.task.maximumSolverAttempts ?? 3,
           },
           candidate: { id: candidateId, digest: candidateDigest },
           partition,
@@ -907,6 +891,7 @@ export class OmegaUseOfficeValEnvironment {
           taskRoot,
           identity,
           validateRecord: validateCheckpointRecord,
+          allowRuntimeChange: this.allowRuntimeRecovery === true,
         })
         return { layout, taskRoot, identity, validateCheckpointRecord, checkpoint }
       },
@@ -921,8 +906,10 @@ export class OmegaUseOfficeValEnvironment {
           pending,
           this.environment.task.maximumConcurrentTrials ?? 1,
           async ({ layout, taskRoot, identity, validateCheckpointRecord, checkpoint }) => {
+            const context = { candidateId, partition, instanceId: layout.instanceId }
+            let previousTaskRoot = null
             if (checkpoint.status !== 'missing') {
-              await quarantineTrialTask({
+              previousTaskRoot = await quarantineTrialTask({
                 runRoot: this.runRoot,
                 taskRoot,
                 reason: checkpoint.status === 'stale'
@@ -930,29 +917,42 @@ export class OmegaUseOfficeValEnvironment {
                   : 'task-attempt-incomplete',
               })
             }
-            const trials = []
-            for (const [trialIndex, seed] of seeds.entries()) {
-              trials.push(await this.runTrial({
-                candidateId,
-                candidateWorkspace: candidate,
+            trialProgress(context, 'started')
+            try {
+              const trials = []
+              for (const [trialIndex, seed] of seeds.entries()) {
+                trials.push(await this.runTrial({
+                  candidateId,
+                  candidateWorkspace: candidate,
+                  layout,
+                  model,
+                  partition,
+                  seed,
+                  trialIndex,
+                  executionId,
+                  previousTrialRoot: checkpoint.status === 'incomplete' && previousTaskRoot
+                    ? join(previousTaskRoot, `trial-${trialIndex + 1}-seed-${seed}`) : null,
+                }))
+              }
+              const record = recordForTask({
                 layout,
-                model,
                 partition,
-                seed,
-                trialIndex,
-                executionId,
-              }))
+                trials,
+                runRoot: this.runRoot,
+                feedbackLimit: this.environment.feedback.maximumTextBytesPerCase,
+              })
+              await validateCheckpointRecord(record)
+              await commitTrialCheckpoint({ runRoot: this.runRoot, taskRoot, identity, record })
+              freshRecords.set(layout.instanceId, record)
+              trialProgress(context, 'committed')
+            } catch (error) {
+              await writeTrialFailure({
+                root: taskRoot, file: 'task-failure.json', context,
+                stage: error.stage ?? 'task', attempt: 1, error, willRetry: false,
+              })
+              trialProgress(context, 'failed', { stage: error.stage ?? 'task' })
+              throw error
             }
-            const record = recordForTask({
-              layout,
-              partition,
-              trials,
-              runRoot: this.runRoot,
-              feedbackLimit: this.environment.feedback.maximumTextBytesPerCase,
-            })
-            await validateCheckpointRecord(record)
-            await commitTrialCheckpoint({ runRoot: this.runRoot, taskRoot, identity, record })
-            freshRecords.set(layout.instanceId, record)
           },
         )
       } catch (error) {
@@ -986,7 +986,8 @@ export async function concurrentMap(values, maximumConcurrency, operation) {
   const failures = []
   let cursor = 0
   async function worker() {
-    while (cursor < values.length) {
+    // 任一不可恢复错误后不再派发新题，等待已在运行的题安全完成并提交。
+    while (cursor < values.length && failures.length === 0) {
       const index = cursor
       cursor += 1
       try {

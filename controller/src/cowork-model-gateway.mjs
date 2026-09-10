@@ -241,6 +241,8 @@ export class ModelGateway {
         docker: this.docker,
         repositoryRoot: this.repositoryRoot,
       })
+      await this.docker.removeContainer(containerName)
+      await this.docker.removeNetwork(networkName)
       this.network = await this.docker.createNetwork({ name: networkName, internal: true })
       this.container = await this.docker.runDetached({
         image: this.config.image,
@@ -290,14 +292,12 @@ export class ModelGateway {
           ]).catch(() => null)
         : null
       await this.stop()
-      const wrapped = new ProtocolError('Model Gateway 启动失败', [
+      throw new ProtocolError('Model Gateway 启动失败', [
         error.message,
         ...(error.details ?? []),
         logs?.stderr,
         logs?.stdout,
       ].filter(Boolean))
-      wrapped.kind = 'infrastructure'
-      throw wrapped
     }
   }
 

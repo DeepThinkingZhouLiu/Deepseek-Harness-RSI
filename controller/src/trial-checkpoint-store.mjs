@@ -79,7 +79,7 @@ async function readCheckpoint(pathValue) {
   return value
 }
 
-export async function inspectTrialCheckpoint({ runRoot, taskRoot, identity, validateRecord }) {
+export async function inspectTrialCheckpoint({ runRoot, taskRoot, identity, validateRecord, allowRuntimeChange = false }) {
   if (typeof validateRecord !== 'function') throw new ProtocolError('Trial Checkpoint 缺少 Record Validator')
   assertInside(runRoot, taskRoot, 'Trial Task Root')
   const taskInfo = await entry(taskRoot, 'Trial Task Root')
@@ -90,7 +90,13 @@ export async function inspectTrialCheckpoint({ runRoot, taskRoot, identity, vali
   if (checkpoint === null) return { status: 'incomplete' }
   const expectedDigest = trialCheckpointDigest(identity)
   if (checkpoint.metadata.identityDigest !== expectedDigest) {
-    return { status: 'stale', actualIdentity: checkpoint.spec.identity }
+    const previous = structuredClone(checkpoint.spec.identity)
+    if (allowRuntimeChange && previous.environment && identity.environment) {
+      previous.environment.runtimeRevision = identity.environment.runtimeRevision
+    }
+    if (!allowRuntimeChange || trialCheckpointDigest(previous) !== expectedDigest) {
+      return { status: 'stale', actualIdentity: checkpoint.spec.identity }
+    }
   }
   const record = await validateRecord(structuredClone(checkpoint.spec.record))
   return { status: 'committed', record }
@@ -147,4 +153,3 @@ export async function commitTrialCheckpoint({ runRoot, taskRoot, identity, recor
   await rename(temporaryPath, checkpointPath)
   return checkpointPath
 }
-

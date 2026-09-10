@@ -1,0 +1,101 @@
+{
+  "apiVersion": "harness-rsi/v1alpha1",
+  "kind": "Benchmark",
+  "metadata": {
+    "id": "cowork-bench-ppt60-v0.2",
+    "name": "CoworkBench all 60 PPT tasks, original partitions"
+  },
+  "spec": {
+    "source": {
+      "adapter": "cowork-bench",
+      "dataset": "DeepThinkingZhouLiu/cowork-evolution-benchmark",
+      "split": "benchmarks/cowork-evo-240-v0.2",
+      "revision": "aac0f28d4596eefbc50041b54ba3bbadf59d6f1b"
+    },
+    "evaluator": {
+      "adapter": "cowork-bench",
+      "resultFormat": "harness-rsi/solver-result-jsonl-v2"
+    },
+    "expectedTotal": 60,
+    "partitions": {
+      "feedback": {
+        "visibility": "detailed",
+        "expectedCount": 30,
+        "instanceIds": [
+          "cowork-evo/automationbench-1115-stratacorp-competitive-response-deck",
+          "cowork-evo/automationbench-4062-q4-sales-tax-remittance-briefing",
+          "cowork-evo/cowork-bench-fy2026-leadership-budget-review",
+          "cowork-evo/officebench-3-5-invoice-payment-trends-briefing",
+          "cowork-evo/officeval-051-image-to-editable-anomaly-detection-flow",
+          "cowork-evo/officeval-054-image-to-editable-water-reuse-process",
+          "cowork-evo/officeval-055-image-to-editable-outage-flow",
+          "cowork-evo/officeval-056-image-to-editable-complaint-closure-flow",
+          "cowork-evo/officeval-060-single-slide-image-layout-repair",
+          "cowork-evo/officeval-066-excel-to-editable-data-deck",
+          "cowork-evo/officeval-069-reference-guided-visual-editing",
+          "cowork-evo/officeval-074-full-deck-localization",
+          "cowork-evo/officeval-075-template-style-transfer",
+          "cowork-evo/pptarena-004-slide8-font-size-increase",
+          "cowork-evo/pptarena-015-bold-all-slide-titles",
+          "cowork-evo/pptarena-016-aligned-photo-triptych",
+          "cowork-evo/pptarena-021-title-case-titles",
+          "cowork-evo/pptarena-028-logical-slide-order-and-agenda",
+          "cowork-evo/pptarena-030-text-data-to-line-chart",
+          "cowork-evo/pptarena-036-speaker-notes-and-slide-removal",
+          "cowork-evo/pptarena-044-match-flags-to-region-descriptions",
+          "cowork-evo/pptarena-047-line-to-clustered-column-chart",
+          "cowork-evo/pptarena-061-sort-table-by-score-descending",
+          "cowork-evo/pptarena-067-accessibility-reading-order-theme-font",
+          "cowork-evo/pptarena-071-negative-number-table-formatting",
+          "cowork-evo/pptarena-074-cross-slide-performance-consolidation",
+          "cowork-evo/pptarena-082-thin-dark-gray-slide-borders",
+          "cowork-evo/pptarena-093-climate-multi-edit-cascade",
+          "cowork-evo/theagentcompany-customer-meeting-openhands-capability-deck",
+          "cowork-evo/theagentcompany-gitlab-engineering-progress-deck"
+        ]
+      },
+      "selection": {
+        "visibility": "aggregate-only",
+        "expectedCount": 10,
+        "instanceIds": [
+          "cowork-evo/automationbench-4044-three-way-match-exception-briefing",
+          "cowork-evo/officeval-043-business-card-to-editable-bilingual-deck",
+          "cowork-evo/officeval-076-outline-to-animated-sales-plan",
+          "cowork-evo/pptarena-003-source-footer-edit",
+          "cowork-evo/pptarena-027-correct-image-placeholders",
+          "cowork-evo/pptarena-037-fade-transitions-all-slides",
+          "cowork-evo/pptarena-053-text-data-to-editable-table",
+          "cowork-evo/pptarena-059-two-url-clickable-hyperlinks",
+          "cowork-evo/pptarena-068-swimlane-flow-canonicalization",
+          "cowork-evo/theagentcompany-hr-internal-tooling-onboarding-deck"
+        ]
+      },
+      "final": {
+        "visibility": "sealed",
+        "expectedCount": 20,
+        "instanceIds": [
+          "cowork-evo/automationbench-4040-month-end-close-readiness-deck",
+          "cowork-evo/cowork-bench-q4-executive-briefing-package",
+          "cowork-evo/officebench-3-2-nvidia-financial-board-briefing",
+          "cowork-evo/officeval-041-note-driven-deck-audit",
+          "cowork-evo/officeval-046-image-to-editable-dual-research-diagrams",
+          "cowork-evo/officeval-063-multi-page-content-editing",
+          "cowork-evo/officeval-064-ordered-photo-layout-completion",
+          "cowork-evo/officeval-068-editable-deck-consolidation",
+          "cowork-evo/officeval-070-single-slide-layout-polishing",
+          "cowork-evo/pptarena-001-kazakh-to-english-preserve-french",
+          "cowork-evo/pptarena-014-bold-titles-except-cover",
+          "cowork-evo/pptarena-023-add-thank-you-slide",
+          "cowork-evo/pptarena-025-theme-banded-financial-table",
+          "cowork-evo/pptarena-029-column-to-pie-chart",
+          "cowork-evo/pptarena-031-fix-text-overflow",
+          "cowork-evo/pptarena-041-picture-matched-gradient-background",
+          "cowork-evo/pptarena-050-normalize-date-formats",
+          "cowork-evo/pptarena-064-okabe-ito-chart-palette",
+          "cowork-evo/pptarena-083-bibliography-from-footers",
+          "cowork-evo/theagentcompany-stock-analysis-board-deck"
+        ]
+      }
+    }
+  }
+}

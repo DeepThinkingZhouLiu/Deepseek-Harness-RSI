@@ -21,6 +21,21 @@ function identity(overrides = {}) {
   }
 }
 
+test('Explicit runtime recovery reuses completed results without accepting a different candidate', async () => {
+  const runRoot = await mkdtemp(join(tmpdir(), 'rsi-runtime-recovery-'))
+  const taskRoot = join(runRoot, 'task')
+  await mkdir(taskRoot)
+  const original = identity({ environment: { runtimeRevision: 'old-runtime', sourceRevision: 'same-source' } })
+  await commitTrialCheckpoint({ runRoot, taskRoot, identity: original, record: { reward: 0.5 } })
+  const current = structuredClone(original)
+  current.environment.runtimeRevision = 'repaired-runtime'
+  const options = { runRoot, taskRoot, identity: current, validateRecord: async value => value }
+  assert.equal((await inspectTrialCheckpoint(options)).status, 'stale')
+  assert.equal((await inspectTrialCheckpoint({ ...options, allowRuntimeChange: true })).status, 'committed')
+  current.candidate.id = 'different'
+  assert.equal((await inspectTrialCheckpoint({ ...options, allowRuntimeChange: true })).status, 'stale')
+})
+
 test('Trial Checkpoint 原子提交后可复用，身份变化时只能作为 stale 归档', async () => {
   const runRoot = await mkdtemp(join(tmpdir(), 'rsi-trial-checkpoint-'))
   const taskRoot = join(runRoot, 'trials', 'scope', 'h0', 'feedback', 'officeval_001')
@@ -77,4 +92,3 @@ test('Trial Checkpoint 摘要损坏时 fail closed，不能被当成未完成题
     /内容摘要不一致/u,
   )
 })
-

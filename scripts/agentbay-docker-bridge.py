@@ -56,19 +56,32 @@ class Bridge:
                 "AGENTBAY_API_KEY, HARNESS_RSI_AGENTBAY_IMAGE_ID and "
                 "HARNESS_RSI_AGENTBAY_POLICY_ID are required"
             )
-        os.environ.setdefault("AGENTBAY_TIMEOUT_MS", "900000")
+        os.environ["AGENTBAY_TIMEOUT_MS"] = os.environ.get(
+            "HARNESS_RSI_AGENTBAY_REQUEST_TIMEOUT_MS", "120000"
+        )
         self.client = AgentBay()
         existing_session_id = os.environ.get(
             "HARNESS_RSI_AGENTBAY_EXISTING_SESSION_ID", ""
         ).strip()
         self.owns_session = not existing_session_id
         if existing_session_id:
-            attached = self.client.get(existing_session_id)
-            self.session = getattr(attached, "session", None)
+            self.session = None
+            last_error = ""
+            for attempt in range(4):
+                try:
+                    attached = self.client.get(existing_session_id)
+                    self.session = getattr(attached, "session", None)
+                    last_error = getattr(attached, "error_message", "")
+                    if self.session is not None:
+                        break
+                except Exception as exc:
+                    last_error = str(exc)
+                if attempt < 3:
+                    time.sleep(2 ** attempt)
             if self.session is None:
                 raise RuntimeError(
                     "AgentBay existing session attach failed: "
-                    f"{getattr(attached, 'error_message', '')}"
+                    f"{last_error}"
                 )
         else:
             self.session = self._create_session(image_id, policy_id, LifecyclePolicy)
@@ -255,6 +268,20 @@ class Bridge:
         )
         self._checked(["sudo", "docker", "info"], 30)
 
+    def _transfer_file(self, operation, **kwargs):
+        for attempt in range(4):
+            try:
+                with self._control_plane_lock:
+                    result = operation(**kwargs)
+                if getattr(result, "success", True):
+                    return result
+                message = getattr(result, "error_message", "file transfer failed")
+            except Exception as error:
+                message = str(error)
+            if attempt < 3:
+                time.sleep(2 ** attempt)
+        raise RuntimeError(f"AgentBay file transfer failed after 4 attempts: {message}")
+
     def upload_archive(self, local_path: str, remote_dir: str) -> None:
         source = Path(local_path).resolve(strict=True)
         with tempfile.TemporaryDirectory(prefix="harness-rsi-agentbay-") as temporary:
@@ -268,12 +295,8 @@ class Bridge:
                 else:
                     bundle.add(source, arcname=source.name, recursive=False)
             remote_archive = f"{self.remote_root}/upload-{uuid.uuid4().hex}.tar"
-            with self._control_plane_lock:
-                uploaded = self.session.file_system.upload_file(
-                    local_path=str(archive), remote_path=remote_archive
-                )
-            if not getattr(uploaded, "success", True):
-                raise RuntimeError(f"AgentBay upload failed: {getattr(uploaded, 'error_message', '')}")
+            self._transfer_file(self.session.file_system.upload_file,
+                                local_path=str(archive), remote_path=remote_archive)
             self._checked(["rm", "-rf", remote_dir], 60)
             self._checked(["mkdir", "-p", remote_dir], 30)
             self._checked(["tar", "-xf", remote_archive, "-C", remote_dir], 600)
@@ -286,12 +309,14 @@ class Bridge:
         self._checked(["sudo", "chmod", "0644", remote_archive], 30)
         with tempfile.TemporaryDirectory(prefix="harness-rsi-agentbay-") as temporary:
             archive = Path(temporary) / "payload.tar"
-            with self._control_plane_lock:
-                downloaded = self.session.file_system.download_file(
-                    remote_path=remote_archive, local_path=str(archive)
-                )
-            if not getattr(downloaded, "success", True):
-                raise RuntimeError(f"AgentBay download failed: {getattr(downloaded, 'error_message', '')}")
+            try:
+                self._transfer_file(self.session.file_system.download_file,
+                                    remote_path=remote_archive, local_path=str(archive))
+            except RuntimeError as error:
+                self._retain_results = True
+                raise RuntimeError(
+                    f"{error}; retained session={self.session.session_id} archive={remote_archive}"
+                ) from error
             target.mkdir(parents=True, exist_ok=True)
             for child in target.iterdir():
                 if child.is_dir() and not child.is_symlink():
@@ -392,6 +417,8 @@ class Bridge:
     def close(self) -> None:
         self.keepalive_stop.set()
         self.keepalive.join(timeout=2)
+        if getattr(self, "_retain_results", False):
+            return
         try:
             self._vm(["rm", "-rf", self.remote_root], 60)
         finally:

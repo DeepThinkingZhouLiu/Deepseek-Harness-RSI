@@ -1,0 +1,101 @@
+{
+  "apiVersion": "harness-rsi/v1alpha1",
+  "kind": "Benchmark",
+  "metadata": {
+    "id": "cowork-bench-xlsx60-v0.2",
+    "name": "CoworkBench all 60 XLSX tasks, original partitions"
+  },
+  "spec": {
+    "source": {
+      "adapter": "cowork-bench",
+      "dataset": "DeepThinkingZhouLiu/cowork-evolution-benchmark",
+      "split": "benchmarks/cowork-evo-240-v0.2",
+      "revision": "aac0f28d4596eefbc50041b54ba3bbadf59d6f1b"
+    },
+    "evaluator": {
+      "adapter": "cowork-bench",
+      "resultFormat": "harness-rsi/solver-result-jsonl-v2"
+    },
+    "expectedTotal": 60,
+    "partitions": {
+      "feedback": {
+        "visibility": "detailed",
+        "expectedCount": 30,
+        "instanceIds": [
+          "cowork-evo/agentcompany-budget-variance-analysis",
+          "cowork-evo/automation-vendor-recon",
+          "cowork-evo/cowork-bench-insales-inventory-reorder-forecast",
+          "cowork-evo/cowork-bench-sf-sla-breach-audit",
+          "cowork-evo/cowork-bench-supplier-contract-workbook",
+          "cowork-evo/cowork-inventory-optimization",
+          "cowork-evo/forte-finance-018-receivables-payables-consolidation",
+          "cowork-evo/officebench-1-6-attendance",
+          "cowork-evo/officebench-1-9-score-average",
+          "cowork-evo/officebench-1-9-total-shopping-weight",
+          "cowork-evo/officeval-093-editable-overlapping-pentagons",
+          "cowork-evo/sb2-debugging-02-03-apc-merger-repair",
+          "cowork-evo/sb2-debugging-04-03-model-structure-repair",
+          "cowork-evo/sb2-debugging-08-03-team-model-repair",
+          "cowork-evo/sb2-financial-model-03-02-bank-valuation",
+          "cowork-evo/sb2-financial-model-05-01-aif-fund",
+          "cowork-evo/sb2-financial-model-13-02-logistics",
+          "cowork-evo/sb2-financial-model-18-03-project-ratios",
+          "cowork-evo/sb2-template-14-09-concession-revenue",
+          "cowork-evo/sb2-visualization-129-mars-valuation",
+          "cowork-evo/sb2-visualization-1437004-activity-dashboard",
+          "cowork-evo/spreadsheet-rl-cross-midnight-hours",
+          "cowork-evo/spreadsheet-rl-dependent-dropdown",
+          "cowork-evo/spreadsheet-rl-inventory-eom",
+          "cowork-evo/spreadsheet-rl-loan-fifo",
+          "cowork-evo/spreadsheet-rl-product-full-outer-join",
+          "cowork-evo/spreadsheet-rl-salary-forecast",
+          "cowork-evo/spreadsheetbench2-12-01-financial-model-completion",
+          "cowork-evo/workspace-bank-ledger",
+          "cowork-evo/workspace-event-plan"
+        ]
+      },
+      "selection": {
+        "visibility": "aggregate-only",
+        "expectedCount": 10,
+        "instanceIds": [
+          "cowork-evo/automation-gl-variance",
+          "cowork-evo/cowork-bench-moex-sector-rotation-dashboard",
+          "cowork-evo/cowork-bench-sf-regional-sales-forecast",
+          "cowork-evo/officebench-1-14-score-column-swap",
+          "cowork-evo/sb2-financial-model-02-03-working-capital-ratios",
+          "cowork-evo/sb2-financial-model-07-02-real-estate",
+          "cowork-evo/sb2-financial-model-20-03-operations-rollforward",
+          "cowork-evo/spreadsheet-rl-clean-email-body",
+          "cowork-evo/spreadsheet-rl-ups-power",
+          "cowork-evo/workspace-strategy-long-horizon"
+        ]
+      },
+      "final": {
+        "visibility": "sealed",
+        "expectedCount": 20,
+        "instanceIds": [
+          "cowork-evo/agentcompany-respondent-format",
+          "cowork-evo/automation-budget-prep",
+          "cowork-evo/automation-cashflow",
+          "cowork-evo/cowork-bench-course-enrollment-dashboard",
+          "cowork-evo/cowork-bench-financial-audit-workbook",
+          "cowork-evo/officebench-1-10-highest-salary-duplicate",
+          "cowork-evo/officebench-1-10-lowest-budget-add-highest",
+          "cowork-evo/officebench-1-5-budget-growth-forecast",
+          "cowork-evo/officebench-1-9-total-salary",
+          "cowork-evo/officeval-088-product-table",
+          "cowork-evo/sb2-debugging-01-03-lbo-repair",
+          "cowork-evo/sb2-debugging-03-03-lbo-repair",
+          "cowork-evo/sb2-financial-model-16-02-ma-valuation",
+          "cowork-evo/sb2-template-06-19-revenue-cagr",
+          "cowork-evo/spreadsheet-rl-archer-top4",
+          "cowork-evo/spreadsheet-rl-department-hours-chart",
+          "cowork-evo/spreadsheet-rl-powerquery-reshape",
+          "cowork-evo/spreadsheet-rl-square-quickbooks-master",
+          "cowork-evo/spreadsheetbench2-09-01-lbo-formula-repair",
+          "cowork-evo/workspace-fashion-ops"
+        ]
+      }
+    }
+  }
+}

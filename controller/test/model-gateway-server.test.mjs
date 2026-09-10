@@ -149,7 +149,11 @@ test('Model Gateway 校验令牌并只向固定 chat/completions 转发', async 
         authorization: request.headers.authorization,
         body: Buffer.concat(chunks).toString('utf8'),
       })
-      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.writeHead(200, { 'content-type': 'text/event-stream', 'x-oneapi-request-id': 'fixture-request-123' })
+      if (upstreamRequests.length === 2) {
+        response.end(JSON.stringify({ choices: [{ message: { content: 'JSON despite SSE header' } }], usage: { prompt_tokens: 2, completion_tokens: 1 } }))
+        return
+      }
       response.end([
         'data: {"choices":[{"delta":{"content":"ok"}}]}',
         '',
@@ -210,6 +214,7 @@ test('Model Gateway 校验令牌并只向固定 chat/completions 转发', async 
       },
     })
     assert.equal(proxied.status, 200)
+    assert.equal(proxied.headers.get('x-oneapi-request-id'), 'fixture-request-123')
     assert.match(await proxied.text(), /delta/u)
     assert.deepEqual(upstreamRequests, [{
       path: '/v1/chat/completions',
@@ -230,6 +235,18 @@ test('Model Gateway 校验令牌并只向固定 chat/completions 转发', async 
       cacheReadTokens: 3,
       reasoningTokens: 2,
     })
+    const jsonResponse = await fetch(`${gatewayUrl}/chat/completions`, {
+      method: 'POST', body,
+      headers: { authorization: `Bearer ${gatewayToken}`, 'content-type': 'application/json' },
+    })
+    assert.equal((await jsonResponse.json()).choices[0].message.content, 'JSON despite SSE header')
+    const jsonUsage = await fetch(`${gatewayUrl}/rsi/usage`, {
+      headers: { authorization: `Bearer ${gatewayToken}` },
+    }).then((response) => response.json())
+    assert.equal(jsonUsage.usageResponses, 2)
+    assert.equal(jsonUsage.unknownUsageResponses, 0)
+    assert.equal(jsonUsage.inputTokens, 13)
+    assert.equal(jsonUsage.outputTokens, 8)
   } finally {
     child.kill('SIGTERM')
     if (child.exitCode === null) await new Promise((resolveExit) => child.once('exit', resolveExit))
@@ -374,7 +391,6 @@ test('Model Gateway 按 Solver/Updater 强制覆盖可信模型并分角色计�
         model: 'trusted-solver',
         max_tokens: 111,
         reasoning_effort: 'high',
-        n: 1,
         stream: true,
         stream_options: { include_usage: true },
         messages: [{ role: 'user', content: 'solver' }],
@@ -384,7 +400,6 @@ test('Model Gateway 按 Solver/Updater 强制覆盖可信模型并分角色计�
         max_tokens: 111,
         messages: [{ role: 'user', content: 'renewed-solver' }],
         reasoning_effort: 'high',
-        n: 1,
         stream: true,
         stream_options: { include_usage: true },
       },
@@ -392,7 +407,6 @@ test('Model Gateway 按 Solver/Updater 强制覆盖可信模型并分角色计�
         model: 'trusted-updater',
         max_completion_tokens: 222,
         messages: [{ role: 'user', content: 'updater' }],
-        n: 1,
         stream: true,
         stream_options: { include_usage: true },
       },
@@ -421,7 +435,7 @@ test('Model Gateway 按 Solver/Updater 强制覆盖可信模型并分角色计�
   }
 })
 
-test('Model Gateway 在未下发 Header 前有限重试上游 502/503/504', async () => {
+test('Model Gateway retries temporary quota 403 and 502 before forwarding content', async () => {
   const providerKey = 'provider-key-for-retry-test'
   const gatewayToken = 'a'.repeat(64)
   let upstreamAttempts = 0
@@ -430,8 +444,8 @@ test('Model Gateway 在未下发 Header 前有限重试上游 502/503/504', asyn
     request.once('end', () => {
       upstreamAttempts += 1
       if (upstreamAttempts === 1) {
-        response.writeHead(503, { 'content-type': 'application/json' })
-        response.end('{"error":"overloaded"}')
+        response.writeHead(403, { 'content-type': 'application/json' })
+        response.end('{"error":{"code":"pre_consume_token_quota_failed"}}')
         return
       }
       if (upstreamAttempts === 2) {

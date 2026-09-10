@@ -14,11 +14,16 @@ import {
 test('Driver Registry 暴露带版本的内置协议', () => {
   const protocols = registeredDriverProtocols()
   assert.deepEqual(protocols.environment, [
+    'cowork-bench-docker-v1',
     'omegause-officeval-docker-v1',
     'text-reasoning-deterministic-v1',
   ])
   assert.deepEqual(protocols.solver, ['dsh-headless-docker-v1', 'msa-minimal-docker-v1'])
-  assert.deepEqual(protocols.updater, ['codex-exec-v1', 'dsh-headless-docker-v1'])
+  assert.deepEqual(protocols.updater, [
+    'claude-code-exec-v1',
+    'codex-exec-v1',
+    'dsh-headless-docker-v1',
+  ])
 })
 
 test('受审查的 Contributor Driver 可以注册，编排器只依赖接口', () => {

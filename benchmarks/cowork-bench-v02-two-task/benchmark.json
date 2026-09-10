@@ -1,0 +1,41 @@
+{
+  "apiVersion": "harness-rsi/v1alpha1",
+  "kind": "Benchmark",
+  "metadata": {
+    "id": "cowork-bench-v02-two-task",
+    "name": "CoworkEvoBench v0.2 two-task GRHS integration validation"
+  },
+  "spec": {
+    "source": {
+      "adapter": "cowork-bench",
+      "dataset": "DeepThinkingZhouLiu/cowork-evolution-benchmark",
+      "split": "benchmarks/cowork-evo-240-v0.2",
+      "revision": "aac0f28d4596eefbc50041b54ba3bbadf59d6f1b"
+    },
+    "evaluator": {
+      "adapter": "cowork-bench",
+      "resultFormat": "harness-rsi/solver-result-jsonl-v2"
+    },
+    "expectedTotal": 4,
+    "partitions": {
+      "feedback": {
+        "visibility": "detailed",
+        "expectedCount": 2,
+        "instanceIds": [
+          "cowork-evo/cowork-bench-rzd-trip-plan-from-outline",
+          "cowork-evo/forte-legal-020-power-of-attorney-risk-report"
+        ]
+      },
+      "selection": {
+        "visibility": "aggregate-only",
+        "expectedCount": 1,
+        "instanceIds": ["cowork-evo/officebench-2-2-concert-contact"]
+      },
+      "final": {
+        "visibility": "sealed",
+        "expectedCount": 1,
+        "instanceIds": ["cowork-evo/automationbench-1202-q1-renewal-control-package"]
+      }
+    }
+  }
+}

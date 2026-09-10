@@ -26,7 +26,6 @@ coverage/
 dist/
 lib/
 *.tsbuildinfo
-/agentbay.log
 
 # 编辑器与操作系统文件
 .DS_Store

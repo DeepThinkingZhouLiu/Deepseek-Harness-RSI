@@ -154,17 +154,11 @@ export function buildFeedbackPacket({
       trialRewards: record.trialRewards,
       ...textFields,
       policyViolations: record.policyViolations,
-      latencyMs: record.latencyMs,
+      // Result 协议允许未采集耗时；FeedbackPacket 必须始终保持纯 JSON，
+      // 不能把 undefined 带入内容寻址或 BaselinePack。
+      latencyMs: record.latencyMs ?? null,
       inputTokens: record.inputTokens ?? null,
       outputTokens: record.outputTokens ?? null,
-      modelTurns: Number.isInteger(feedback.modelTurns) ? feedback.modelTurns : 0,
-      unparsedTurns: Number.isInteger(feedback.unparsedTurns) ? feedback.unparsedTurns : 0,
-      parserFailureSamples: Array.isArray(feedback.parserFailureSamples)
-        ? feedback.parserFailureSamples.slice(0, 3).map((sample) => truncateUtf8(
-            redact(sample, secretValues),
-            320,
-          ))
-        : [],
       artifacts: artifactSummary.trials,
       artifactSummary: {
         totalEntries: artifactSummary.totalEntries,

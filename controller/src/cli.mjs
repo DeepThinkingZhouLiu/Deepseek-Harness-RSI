@@ -8,7 +8,8 @@ import {
   buildExperimentRuntime,
   finalizeEvolution,
   preflightExperiment,
-  resumeConfiguredEvolution,
+  runCrossFinalEvaluation,
+  resumePopulationEvolution,
   runConfiguredBaseline,
   runConfiguredEvolution,
 } from './cowork-orchestrator.mjs'
@@ -36,8 +37,9 @@ const HELP = `HarnessEvoGym Controller
   harness-rsi experiment baseline --config <experiment.json> [--run-id <id>]
   harness-rsi experiment baseline-pack-export --run <run> --output <pack.json> --id <id> [--branch <branch-id>]
   harness-rsi experiment run --config <experiment.json> [--run-id <id>]
-  harness-rsi experiment resume --run <population-run>
-  harness-rsi experiment finalize --run <single-run | population-run> [--recover-infrastructure]
+  harness-rsi experiment resume --run <population-run> [--upgrade-controller] [--recover-interrupted]
+  harness-rsi experiment finalize --run <single-run | population-run> [--recover-infrastructure | --resume-final]
+  harness-rsi experiment cross-final --source-run <population-run> --target-config <experiment.json> --run-id <id>
   harness-rsi benchmark validate --config <benchmark.json> [--output <report.json>]
   harness-rsi evaluate compare \\
     --benchmark <benchmark.json> \\
@@ -68,9 +70,11 @@ const HELP = `HarnessEvoGym Controller
   - experiment run 只使用 feedback 与 selection，永远不会读取 final。
   - experiment baseline 只评测 H0 selection，不启动 Updater，不消耗进化预算。
   - experiment baseline-pack-export 从已有 Run 固化 H0 Selection 与第一轮 Feedback，不读取 final。
-  - experiment resume 只恢复同一 Controller Revision 下的 Cowork Population 检查点。
+  - experiment resume 只恢复同一 Controller Revision 下暂停或处于稳定 Wave 边界的 Cowork Population。
   - experiment finalize 是唯一允许解锁 Cowork sealed final 的入口。
+  - experiment cross-final 将源格式锁定的 Champion 与 H0 配对评测到目标格式 sealed final；同一命令可续跑。
   - --recover-infrastructure 只能在 Population 上次失败且从未访问 sealed final 时使用，并且只能恢复一次。
+  - --resume-final 继续同一个已领取的 Final Attempt，并复用已提交的 Trial Checkpoint。
   - Provider 密钥只从运行时环境变量读取，不写入 Experiment 或 .rsi 产物。
 `
 
@@ -143,13 +147,15 @@ async function validateExperimentCommand(args) {
     target: bundle.target.id,
     updater: bundle.updater.id,
     provider: bundle.provider.id,
-    strategy: bundle.experiment.evolution.grhs === null ? bundle.strategy.id : null,
-    groupController: bundle.experiment.evolution.grhs === null ? null : 'grhs-v1',
+    providers: {
+      solver: bundle.providers.solver.id,
+      updater: bundle.providers.updater.id,
+    },
+    strategy: bundle.strategy.id,
     environment: bundle.environment.id,
     benchmark: bundle.benchmark.id,
     policy: bundle.policy.id,
     mutationLevel: bundle.experiment.evolution.mutationLevel,
-    grhs: bundle.experiment.evolution.grhs,
     partitions: Object.fromEntries(
       Object.entries(bundle.benchmark.partitions).map(([name, value]) => [name, value.instanceIds.length]),
     ),
@@ -210,10 +216,10 @@ async function baselineRunCommand(args) {
     runId: result.runId,
     runRoot: result.runRoot,
     baselinePath: result.baselinePath,
-    baselineId: result.baselineId ?? result.state.best.candidateId,
-    status: result.state.status ?? result.state.metadata.status,
-    primary: result.primary ?? result.state.best.evaluation.primary,
-    budgetConsumed: result.budgetConsumed ?? result.state.budget.consumed,
+    baselineId: result.state.best.candidateId,
+    status: result.state.status,
+    primary: result.state.best.evaluation.primary,
+    budgetConsumed: result.state.budget.consumed,
   }, options.get('output'))
 }
 
@@ -229,6 +235,10 @@ async function baselinePackExportCommand(args) {
     ...(options.get('branch') ? { branchId: options.get('branch') } : {}),
     secrets: [process.env.RSI_PROVIDER_API_KEY].filter(Boolean),
   })
+  const decision = result.pack.spec.decision ?? {
+    partition: 'selection',
+    ...result.pack.spec.selection,
+  }
   await emit({
     apiVersion: 'harness-rsi/v1alpha1',
     kind: 'BaselinePackExportReport',
@@ -236,17 +246,25 @@ async function baselinePackExportCommand(args) {
     path: result.path,
     sha256: result.pack.metadata.sha256,
     source: result.pack.spec.source,
-    primary: result.pack.spec.selection.evaluation.primary,
-    selectionCases: result.pack.spec.selection.records.length,
+    primary: decision.evaluation.primary,
+    decisionPartition: decision.partition,
+    decisionCases: decision.records.length,
+    ...(decision.partition === 'selection'
+      ? { selectionCases: decision.records.length }
+      : {}),
     feedbackCases: result.pack.spec.feedback.records.length,
   })
 }
 
 async function evolveResumeCommand(args) {
-  const { options } = parseOptions(args, { valueOptions: new Set(['run', 'output']) })
-  const result = await resumeConfiguredEvolution({
+  const { options, flags } = parseOptions(args, {
+    valueOptions: new Set(['run', 'output']), booleanFlags: new Set(['upgrade-controller', 'recover-interrupted']),
+  })
+  const result = await resumePopulationEvolution({
     repositoryRoot: REPOSITORY_ROOT,
     runDirectory: requiredPath(options, 'run'),
+    allowControllerUpgrade: flags.has('upgrade-controller'),
+    allowInterruptedRecovery: flags.has('recover-interrupted'),
     onEvent: progress,
   })
   await emit({
@@ -255,19 +273,23 @@ async function evolveResumeCommand(args) {
     runId: result.runId,
     runRoot: result.runRoot,
     championId: result.championId,
-    status: result.state.status ?? result.state.metadata.status,
+    status: result.state.status,
   }, options.get('output'))
 }
 
 async function evolveFinalizeCommand(args) {
   const { options, flags } = parseOptions(args, {
     valueOptions: new Set(['run', 'output']),
-    booleanFlags: new Set(['recover-infrastructure']),
+    booleanFlags: new Set(['recover-infrastructure', 'resume-final']),
   })
+  if (flags.has('recover-infrastructure') && flags.has('resume-final')) {
+    throw new ProtocolError('--recover-infrastructure 与 --resume-final 不能同时使用')
+  }
   const result = await finalizeEvolution({
     repositoryRoot: REPOSITORY_ROOT,
     runDirectory: requiredPath(options, 'run'),
     recoverInfrastructure: flags.has('recover-infrastructure'),
+    resumeFinal: flags.has('resume-final'),
     onEvent: progress,
   })
   await emit({
@@ -276,6 +298,28 @@ async function evolveFinalizeCommand(args) {
     runId: result.runId,
     reportPath: result.reportPath,
     metrics: result.report.rsiMetrics,
+  }, options.get('output'))
+}
+
+async function crossFinalCommand(args) {
+  const { options } = parseOptions(args, {
+    valueOptions: new Set(['source-run', 'target-config', 'run-id', 'output']),
+  })
+  const result = await runCrossFinalEvaluation({
+    repositoryRoot: REPOSITORY_ROOT,
+    sourceRunDirectory: requiredPath(options, 'source-run'),
+    targetExperimentPath: requiredPath(options, 'target-config'),
+    runId: requiredValue(options, 'run-id'),
+    onEvent: progress,
+  })
+  await emit({
+    apiVersion: 'harness-rsi/v1alpha1',
+    kind: 'CrossFinalEvaluationRunReport',
+    runId: result.runId,
+    runRoot: result.runRoot,
+    reportPath: result.reportPath,
+    summaryPath: result.summaryPath,
+    metrics: result.report.partitions.final,
   }, options.get('output'))
 }
 
@@ -381,6 +425,7 @@ async function main() {
   if (group === 'experiment' && action === 'run') return await evolveRunCommand(args)
   if (group === 'experiment' && action === 'resume') return await evolveResumeCommand(args)
   if (group === 'experiment' && action === 'finalize') return await evolveFinalizeCommand(args)
+  if (group === 'experiment' && action === 'cross-final') return await crossFinalCommand(args)
   if (group === 'runtime' && action === 'build') return await buildRuntimeCommand(args)
   if (group === 'benchmark' && action === 'validate') return await validateBenchmarkCommand(args)
   if (group === 'evaluate' && action === 'compare') return await compareCommand(args)

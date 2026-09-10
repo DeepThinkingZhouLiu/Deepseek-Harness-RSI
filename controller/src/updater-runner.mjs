@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { relayWrappedInvocation, socatRelayWrappedInvocation } from './model-gateway-relay.mjs'
+import { relayWrappedInvocation } from './model-gateway-relay.mjs'
 import { ProtocolError } from './protocol.mjs'
 import {
   buildBubblewrapInvocation,
@@ -13,12 +13,13 @@ import { runProcess } from './subprocess.mjs'
 
 const SOURCE_WRAPPER = 'process.chdir(process.env.TASK_CWD); await import(process.env.DSH_SOURCE_BIN)'
 const SAFE_ENV_KEYS = new Set(['HOME', 'LANG', 'LC_ALL', 'PATH', 'TMPDIR', 'TZ'])
-const UPDATER_BACKENDS = new Set(['deepseek-harness', 'codex-cli'])
+const UPDATER_BACKENDS = new Set(['deepseek-harness', 'codex-cli', 'claude-code-cli'])
 const CODEX_PROVIDER_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u
 const CODEX_NATIVE_TARGETS = new Map([
   ['linux:x64', ['codex-linux-x64', 'x86_64-unknown-linux-musl']],
   ['linux:arm64', ['codex-linux-arm64', 'aarch64-unknown-linux-musl']],
 ])
+
 // The Updater is frozen infrastructure. Only the evaluated Solver uses the
 // evolving minimal preset.
 export const INFRASTRUCTURE_UPDATER_PRESET = 'standard'
@@ -71,12 +72,12 @@ function safeBaseEnvironment(baseEnv) {
   return env
 }
 
-function codexNativeExecutable(root = UPDATER_SANDBOX_PATHS.runtime) {
+function codexNativeSandboxExecutable() {
   const target = CODEX_NATIVE_TARGETS.get(`${process.platform}:${process.arch}`)
   if (target === undefined) throw new ProtocolError('Codex Updater 不支持当前平台')
   const [packageName, triple] = target
   return join(
-    root,
+    UPDATER_SANDBOX_PATHS.runtime,
     'node_modules', '@openai', packageName, 'vendor', triple, 'bin', 'codex',
   )
 }
@@ -87,10 +88,13 @@ export function buildUpdaterInvocation({
   updaterRuntime,
   codexPath,
   codexDistributionRoot,
+  claudeCodePath,
+  claudeCodeDistributionRoot,
   updaterProvider,
   updaterModel,
   updaterReasoningEffort,
   candidateRoot,
+  candidateReadOnly = false,
   gitRoot,
   runRoot,
   runtimePatch,
@@ -109,14 +113,15 @@ export function buildUpdaterInvocation({
   setprivPath = '/usr/bin/setpriv',
   gatewayRelayPath,
   preserveSupplementaryGroups = false,
-  privilegedLauncher = false,
+  privilegedHost = false,
   baseEnv = process.env,
 }) {
   if (!UPDATER_BACKENDS.has(backend)) {
     throw new ProtocolError(`未知 Updater backend：${backend}`)
   }
-  if (!Number.isInteger(uid) || uid < 1 || !Number.isInteger(gid) || gid < 1) {
-    throw new ProtocolError('Updater uid/gid 必须是正整数')
+  if (!Number.isInteger(uid) || !Number.isInteger(gid)
+      || (privilegedHost ? uid !== 0 || gid !== 0 : uid < 1 || gid < 1)) {
+    throw new ProtocolError('Updater uid/gid 与宿主执行模式不匹配')
   }
   const workspace = resolve(candidateRoot)
   const repository = resolve(gitRoot)
@@ -142,18 +147,26 @@ export function buildUpdaterInvocation({
   const run = resolve(runRoot)
   const node = resolve(nodeBinary)
   const patch = resolve(runtimePatch)
-  const nodeToolchain = backend === 'codex-cli' ? null : executableDistributionRoot(node)
-  const codex = backend === 'codex-cli' ? resolve(codexPath) : null
+  const nodeToolchain = executableDistributionRoot(node)
+  const cliExecutable = backend === 'codex-cli'
+    ? resolve(codexPath)
+    : backend === 'claude-code-cli'
+      ? resolve(claudeCodePath)
+      : null
   const runtime = backend === 'codex-cli'
     ? (codexDistributionRoot === undefined
-        ? executableDistributionRoot(codex)
+        ? executableDistributionRoot(cliExecutable)
         : resolve(codexDistributionRoot))
-    : resolve(updaterRuntime)
-  if (runtime === null) throw new ProtocolError('Codex CLI 必须来自可挂载的独立 distribution')
-  if (backend === 'codex-cli') {
-    const codexRelativePath = relative(runtime, codex)
-    if (codexRelativePath === '..' || codexRelativePath.startsWith(`..${sep}`)) {
-      throw new ProtocolError('Codex CLI executable 必须位于固定 distribution 内')
+    : backend === 'claude-code-cli'
+      ? (claudeCodeDistributionRoot === undefined
+          ? executableDistributionRoot(cliExecutable)
+          : resolve(claudeCodeDistributionRoot))
+      : resolve(updaterRuntime)
+  if (runtime === null) throw new ProtocolError('CLI Updater 必须来自可挂载的独立 distribution')
+  if (cliExecutable !== null) {
+    const cliRelativePath = relative(runtime, cliExecutable)
+    if (cliRelativePath === '..' || cliRelativePath.startsWith(`..${sep}`)) {
+      throw new ProtocolError('CLI Updater executable 必须位于固定 distribution 内')
     }
   }
   const relaySourcePath = gatewayRelayPath === undefined
@@ -200,11 +213,11 @@ export function buildUpdaterInvocation({
         throw new ProtocolError(`Codex Updater ${name} 不能为空`)
       }
     }
-    const nativeCodex = codexNativeExecutable(runtime)
     const toml = (value) => JSON.stringify(value)
     invocation = {
-      command: nativeCodex,
+      command: node,
       args: [
+        cliExecutable,
         'exec',
         '--ignore-user-config',
         '--ignore-rules',
@@ -230,6 +243,47 @@ export function buildUpdaterInvocation({
         CODEX_HOME: commonEnvironment.HOME,
         // Python 检查可以被 Codex 显式调用；它们的 pyc 是临时产物，
         // 必须留在沙箱私有的 run tmp，不能进入 Candidate Mutation Diff。
+        PYTHONDONTWRITEBYTECODE: '1',
+        PYTHONPYCACHEPREFIX: join(UPDATER_SANDBOX_PATHS.run, 'tmp', 'python-cache'),
+      },
+    }
+  } else if (backend === 'claude-code-cli') {
+    for (const [name, value] of [
+      ['model', updaterModel],
+      ['reasoning effort', updaterReasoningEffort],
+    ]) {
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        throw new ProtocolError(`Claude Code Updater ${name} 不能为空`)
+      }
+    }
+    invocation = {
+      command: cliExecutable,
+      args: [
+        '--print',
+        '--bare',
+        '--no-session-persistence',
+        '--output-format', 'stream-json',
+        '--verbose',
+        '--dangerously-skip-permissions',
+        '--permission-mode', 'bypassPermissions',
+        '--permission-prompts', 'none',
+        '--tools', 'Read,Edit,Write,Bash,Glob,Grep',
+        '--strict-mcp-config',
+        '--mcp-config', '{"mcpServers":{}}',
+        '--disable-slash-commands',
+        '--no-chrome',
+        '--model', updaterModel,
+        '--effort', updaterReasoningEffort,
+        prompt,
+      ],
+      cwd: workspace,
+      env: {
+        ...commonEnvironment,
+        ANTHROPIC_BASE_URL: gatewayUrl,
+        ANTHROPIC_API_KEY: gatewayDummyKey,
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        DISABLE_TELEMETRY: '1',
+        DISABLE_ERROR_REPORTING: '1',
         PYTHONDONTWRITEBYTECODE: '1',
         PYTHONPYCACHEPREFIX: join(UPDATER_SANDBOX_PATHS.run, 'tmp', 'python-cache'),
       },
@@ -260,14 +314,12 @@ export function buildUpdaterInvocation({
     })
   }
   const innerInvocation = isolatedGateway
-    ? (backend === 'codex-cli'
-        ? socatRelayWrappedInvocation({ invocation, socketPath: gatewaySocketPath })
-        : relayWrappedInvocation({
-            invocation,
-            nodePath: node,
-            relayPath: relaySourcePath,
-            socketPath: gatewaySocketPath,
-          }))
+    ? relayWrappedInvocation({
+        invocation,
+        nodePath: node,
+        relayPath: relaySourcePath,
+        socketPath: gatewaySocketPath,
+      })
     : invocation
   return buildBubblewrapInvocation({
     invocation: {
@@ -289,23 +341,27 @@ export function buildUpdaterInvocation({
     bwrapPath,
     setprivPath,
     preserveSupplementaryGroups,
-    privilegedLauncher,
-    // A root Controller cannot raise loopback in a fresh net namespace on
-    // hosts whose capability bounding set omits CAP_NET_ADMIN. In that
-    // attested fallback, only the frozen Codex process and its one-time dummy
-    // gateway credential share the host network; no provider secret enters
-    // this invocation. Rootless launchers retain the private namespace.
-    network: isolatedGateway && !privilegedLauncher ? 'none' : 'shared',
+    privilegedHost,
+    includeDswRuntimeLoader: node === '/usr/local/bin/node',
+    // Claude Code 2.1.263 拒绝在 namespace root 身份下使用非交互权限旁路。
+    // 宿主本身已是普通用户，因此仅对 Claude 保持相同的非 root UID/GID。
+    guestIdentity: backend === 'claude-code-cli' ? 'host' : 'root',
+    // Root fallback cannot configure loopback in a private net namespace on
+    // hosts without CAP_NET_ADMIN. Keep the Unix relay and mount/capability
+    // confinement, but use host networking only for that privileged fallback.
+    network: isolatedGateway && !privilegedHost ? 'none' : 'shared',
     procMode: backend === 'codex-cli'
       ? 'synthetic-self'
-      : (isolatedGateway ? 'empty' : 'mounted'),
+      : backend === 'claude-code-cli'
+        ? 'mounted'
+        : (isolatedGateway ? 'empty' : 'mounted'),
     ...(backend === 'codex-cli'
-      ? { procSelfExecutable: codexNativeExecutable() }
+      ? { procSelfExecutable: codexNativeSandboxExecutable() }
       : {}),
     hostname: 'rsi-updater',
     mounts: [
       { source: runtime, destination: UPDATER_SANDBOX_PATHS.runtime, readOnly: true },
-      { source: workspace, destination: UPDATER_SANDBOX_PATHS.candidate, readOnly: false },
+      { source: workspace, destination: UPDATER_SANDBOX_PATHS.candidate, readOnly: candidateReadOnly },
       { source: repository, destination: UPDATER_SANDBOX_PATHS.git, readOnly: false },
       { source: feedback, destination: UPDATER_SANDBOX_PATHS.feedback, readOnly: true },
       {
@@ -330,7 +386,7 @@ export function buildUpdaterInvocation({
         destination: UPDATER_SANDBOX_PATHS.runtimePatch,
         readOnly: true,
       }] : []),
-      ...(isolatedGateway && backend !== 'codex-cli' ? [{
+      ...(isolatedGateway ? [{
         source: relaySourcePath,
         destination: UPDATER_SANDBOX_PATHS.relay,
         readOnly: true,
@@ -346,16 +402,20 @@ export function buildUpdaterInvocation({
 
 export function extractUpdaterStopReason(backend, stdout) {
   let text = typeof stdout === 'string' ? stdout : ''
-  if (backend === 'codex-cli') {
+  if (backend === 'codex-cli' || backend === 'claude-code-cli') {
     const messages = []
     for (const line of text.split(/\r?\n/u)) {
       if (!line.trim()) continue
       try {
         const event = JSON.parse(line)
-        if (event?.type === 'item.completed'
+        if (backend === 'codex-cli' && event?.type === 'item.completed'
             && event.item?.type === 'agent_message'
             && typeof event.item.text === 'string') {
           messages.push(event.item.text)
+        } else if (backend === 'claude-code-cli'
+            && event?.type === 'result'
+            && typeof event.result === 'string') {
+          messages.push(event.result)
         }
       } catch {
         // Codex diagnostics go to stderr, but ignore any non-JSON stdout line.

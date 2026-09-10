@@ -14,9 +14,10 @@ spec:
   materialization:
     strategy: source-plus-seed-overlay
     seedPath: targets/msa-minimal/cowork-v1
-    seedDigest: f7252066b61ca2d842fbf4efd3776512876a987bf7904b2c078f5dffe9dcf998
+    seedDigest: 1f751d58752e8f4d35ac62d75efd0ce2b7013b36b68123c81d5d45c852819ea2
     overrides:
       - agent.py
+      - image_tool.py
       - model.py
       - run.py
     runtimeRoot: .rsi/runs
@@ -51,6 +52,7 @@ spec:
       - "**/.env.*"
       - "**/*credential*"
       - "**/*secret*"
+      - image_tool.py
 
     limits:
       maximumTreeEntries: 2000
@@ -62,6 +64,7 @@ spec:
       protocol: msa-minimal-cowork-v1
       requiredFiles:
         - agent.py
+        - image_tool.py
         - model.py
         - run.py
         - tools.py
@@ -69,6 +72,7 @@ spec:
         - profiles/cowork.json
       pythonFiles:
         - agent.py
+        - image_tool.py
         - model.py
         - run.py
         - tools.py
@@ -79,10 +83,11 @@ spec:
           max_steps: 12
           command_timeout_seconds: 600
           max_observation_chars: 131072
-          # Model Gateway 会按正式 Experiment 固定为 8192，Candidate 不能声明更高的无效值。
-          max_output_tokens: 8192
+          # 不再施加 8192 的人工小上限；使用当前可信网关协议支持的最高输出预算。
+          max_output_tokens: 65536
           maximum_skill_files: 128
           maximum_skill_chars: 524288
+          max_image_bytes: 4194304
       skills:
         root: skills
         requiredNamePrefix: cowork-

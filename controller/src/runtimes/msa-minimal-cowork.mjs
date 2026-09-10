@@ -337,6 +337,7 @@ export async function runMsaMinimalCoworkSolver({
     environment: {
       HOME: '/tmp/home',
       TMPDIR: '/tmp',
+      UserInstallation: 'file:///tmp/libreoffice-profile',
       PYTHONDONTWRITEBYTECODE: '1',
       RSI_MODEL_GATEWAY_BASE_URL: gateway.baseUrl,
       RSI_MODEL_GATEWAY_MODEL: model.model,
@@ -361,21 +362,35 @@ export async function runMsaMinimalCoworkSolver({
     timeoutMs,
   })
 
-  let answer = await readBoundedRegularFile(answerPath, 'MSA Solver Answer', maximumAnswerBytes)
-  let trace = validateTrace(await readBoundedRegularFile(tracePath, 'MSA Solver Trace', maximumTraceBytes))
-  answer = redactExactSecret(answer, gateway.dummyKey).trim()
-  trace = redactExactSecret(trace, gateway.dummyKey)
-  if (!answer) throw new ProtocolError('MSA Solver Answer 去除空白后为空')
-  await Promise.all([
-    writeFile(answerPath, `${answer}\n`, { encoding: 'utf8', mode: 0o600 }),
-    writeFile(tracePath, trace, { encoding: 'utf8', mode: 0o600 }),
-  ])
-  return {
-    answer,
-    trace,
-    stderr: redactExactSecret(result.stderr ?? '', gateway.dummyKey),
-    durationMs: result.durationMs,
-    outputTruncated: result.outputTruncated ?? false,
+  try {
+    let answer = await readBoundedRegularFile(answerPath, 'MSA Solver Answer', maximumAnswerBytes)
+    let trace = validateTrace(await readBoundedRegularFile(tracePath, 'MSA Solver Trace', maximumTraceBytes))
+    answer = redactExactSecret(answer, gateway.dummyKey).trim()
+    trace = redactExactSecret(trace, gateway.dummyKey)
+    if (!answer) throw new ProtocolError('MSA Solver Answer 去除空白后为空')
+    await Promise.all([
+      writeFile(answerPath, `${answer}\n`, { encoding: 'utf8', mode: 0o600 }),
+      writeFile(tracePath, trace, { encoding: 'utf8', mode: 0o600 }),
+    ])
+    return {
+      answer,
+      trace,
+      stderr: redactExactSecret(result.stderr ?? '', gateway.dummyKey),
+      durationMs: result.durationMs,
+      outputTruncated: result.outputTruncated ?? false,
+    }
+  } catch (error) {
+    // CLI 退出成功但 Answer/Trace 无效时，同样保留输出，避免校验错误掩盖根因。
+    error.processResult = {
+      exitCode: result.exitCode ?? 0,
+      signal: result.signal ?? null,
+      timedOut: result.timedOut ?? false,
+      durationMs: result.durationMs,
+      outputTruncated: result.outputTruncated ?? false,
+      stdout: redactExactSecret(result.stdout ?? '', gateway.dummyKey),
+      stderr: redactExactSecret(result.stderr ?? '', gateway.dummyKey),
+    }
+    throw error
   }
 }
 
@@ -487,12 +502,17 @@ export function createMsaMinimalCoworkSolverDriver({
     },
     async beginUsageBatch() {
       if (!modelGateway) throw new ProtocolError('MSA Solver Usage Batch 需要 Model Gateway')
-      if (usageBatch !== null) throw new ProtocolError('MSA Solver Usage Batch 不能嵌套')
-      usageBatch = { before: await modelGateway.usage('solver') }
+      if (usageBatch === null) {
+        usageBatch = { participants: 0, before: modelGateway.usage('solver') }
+      }
+      usageBatch.participants += 1
+      await usageBatch.before
     },
     async endUsageBatch() {
       if (usageBatch === null) throw new ProtocolError('MSA Solver Usage Batch 尚未开始')
-      const { before } = usageBatch
+      usageBatch.participants -= 1
+      if (usageBatch.participants > 0) return null
+      const before = await usageBatch.before
       usageBatch = null
       const usage = diffModelUsage(before, await modelGateway.usage('solver'))
       addUsage(measuredUsage, usage)

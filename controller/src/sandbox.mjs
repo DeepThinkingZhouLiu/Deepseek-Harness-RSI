@@ -206,28 +206,37 @@ export function buildBubblewrapInvocation({
   hostname = 'harness-rsi',
   maskedPaths = [],
   preserveSupplementaryGroups = false,
-  privilegedLauncher = false,
+  guestIdentity = 'root',
+  privilegedHost = false,
+  includeDswRuntimeLoader = false,
 }) {
-  const userId = positiveIdentity(uid, 'sandbox uid')
-  const groupId = positiveIdentity(gid, 'sandbox gid')
+  if (typeof privilegedHost !== 'boolean') {
+    throw new ProtocolError('privilegedHost 必须是布尔值')
+  }
+  if (typeof includeDswRuntimeLoader !== 'boolean') {
+    throw new ProtocolError('includeDswRuntimeLoader 必须是布尔值')
+  }
+  const userId = privilegedHost ? uid : positiveIdentity(uid, 'sandbox uid')
+  const groupId = privilegedHost ? gid : positiveIdentity(gid, 'sandbox gid')
+  if (privilegedHost && (userId !== 0 || groupId !== 0
+      || process.getuid?.() !== 0 || process.getgid?.() !== 0)) {
+    throw new ProtocolError('privilegedHost 仅允许 root 宿主进程使用')
+  }
   const bwrap = absolutePath(bwrapPath, 'bwrapPath')
   const setpriv = absolutePath(setprivPath, 'setprivPath')
   const unshare = absolutePath(unsharePath, 'unsharePath')
   if (typeof preserveSupplementaryGroups !== 'boolean') {
     throw new ProtocolError('preserveSupplementaryGroups 必须是布尔值')
   }
-  if (typeof privilegedLauncher !== 'boolean') {
-    throw new ProtocolError('privilegedLauncher 必须是布尔值')
+  if (privilegedHost && preserveSupplementaryGroups) {
+    throw new ProtocolError('privilegedHost 不保留宿主附加组')
   }
-  if (privilegedLauncher && process.getuid?.() !== 0) {
-    throw new ProtocolError('privilegedLauncher 只允许可信 root Controller 使用')
-  }
-  if (privilegedLauncher && preserveSupplementaryGroups) {
-    throw new ProtocolError('privilegedLauncher 必须清空附加组')
-  }
-  if (preserveSupplementaryGroups
+  if (!privilegedHost && preserveSupplementaryGroups
       && (process.getuid?.() !== userId || process.getgid?.() !== groupId)) {
     throw new ProtocolError('只有保持当前宿主 UID/GID 时才能保留附加组')
+  }
+  if (!['root', 'host'].includes(guestIdentity)) {
+    throw new ProtocolError('sandbox guestIdentity 只能是 root 或 host')
   }
   if (!NETWORK_MODES.has(network)) throw new ProtocolError('sandbox network 模式无效')
   if (!PROC_MODES.has(procMode)) throw new ProtocolError('sandbox proc 模式无效')
@@ -251,14 +260,17 @@ export function buildBubblewrapInvocation({
   const bwrapArguments = [
     '--die-with-parent',
     '--new-session',
-    ...(privilegedLauncher ? [] : ['--unshare-user']),
+    ...(privilegedHost ? [] : ['--unshare-user']),
     '--unshare-pid',
     '--unshare-ipc',
     '--unshare-uts',
     '--unshare-cgroup',
-    ...(network === 'none' && !privilegedLauncher ? ['--unshare-net'] : []),
-    ...(privilegedLauncher ? [] : ['--uid', '0', '--gid', '0']),
-    ...(privilegedLauncher ? [] : ['--cap-drop', 'ALL']),
+    ...(network === 'none' && !privilegedHost ? ['--unshare-net'] : []),
+    ...(privilegedHost ? [] : [
+      '--uid', guestIdentity === 'host' ? String(userId) : '0',
+      '--gid', guestIdentity === 'host' ? String(groupId) : '0',
+    ]),
+    '--cap-drop', 'ALL',
     '--hostname', hostname,
     ...destinationParents(mounts),
     '--ro-bind', '/usr', '/usr',
@@ -267,6 +279,10 @@ export function buildBubblewrapInvocation({
     '--symlink', 'usr/lib', '/lib',
     '--symlink', 'usr/lib64', '/lib64',
     '--dir', '/etc',
+    ...(includeDswRuntimeLoader ? [
+      '--dir', '/etc/dsw',
+      '--ro-bind-try', '/etc/dsw/runtime', '/etc/dsw/runtime',
+    ] : []),
     '--ro-bind-try', '/etc/ssl', '/etc/ssl',
     '--ro-bind-try', '/etc/ca-certificates', '/etc/ca-certificates',
     '--ro-bind-try', '/etc/passwd', '/etc/passwd',
@@ -290,30 +306,15 @@ export function buildBubblewrapInvocation({
     '--tmpfs', '/run',
     '--chdir', rewritten.cwd,
     '--',
-    ...(privilegedLauncher
-      ? [
-          setpriv,
-          `--reuid=${userId}`,
-          `--regid=${groupId}`,
-          '--clear-groups',
-          '--no-new-privs',
-          '--bounding-set=-all',
-          '--inh-caps=-all',
-          '--ambient-caps=-all',
-          rewritten.command,
-          ...rewritten.args,
-        ]
-      : [rewritten.command, ...rewritten.args]),
+    rewritten.command,
+    ...rewritten.args,
   ]
 
-  if (privilegedLauncher) {
-    return network === 'none'
-      ? { command: unshare, args: ['--net', '--', bwrap, ...bwrapArguments], cwd: '/', env: rewritten.env }
-      : { command: bwrap, args: bwrapArguments, cwd: '/', env: rewritten.env }
-  }
+  const privilegedNetworkBoundary = privilegedHost && network === 'none'
   return {
-    command: setpriv,
-    args: [
+    command: privilegedNetworkBoundary ? unshare : privilegedHost ? bwrap : setpriv,
+    args: privilegedNetworkBoundary ? ['--net', bwrap, ...bwrapArguments]
+      : privilegedHost ? bwrapArguments : [
       `--reuid=${userId}`,
       `--regid=${groupId}`,
       preserveSupplementaryGroups ? '--keep-groups' : '--clear-groups',

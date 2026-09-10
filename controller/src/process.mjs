@@ -80,7 +80,11 @@ export async function runProcess(command, args, options = {}) {
       }
       if (timedOut || !allowExitCodes.includes(code)) {
         const reason = timedOut ? `命令超时（${timeoutMs}ms）` : `命令退出码 ${code}`
-        reject(new ProtocolError(`${reason}：${command}`, [result.stderr.slice(-4000), result.stdout.slice(-2000)].filter(Boolean)))
+        const error = new ProtocolError(`${reason}：${command}`, [result.stderr.slice(-4000), result.stdout.slice(-2000)].filter(Boolean))
+        // 仅保留已脱敏的执行结果；命令参数可能包含任务或凭据，不进入诊断产物。
+        const { command: _command, args: _args, ...processResult } = result
+        error.processResult = processResult
+        reject(error)
         return
       }
       resolve(result)
