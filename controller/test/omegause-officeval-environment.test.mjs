@@ -36,12 +36,19 @@ test('OmegaUse 受控并发不超过上限且保持 Benchmark 顺序', async () 
   assert.deepEqual(result, [30, 5, 20, 1])
 })
 
-test('只有重试耗尽的空模型正文允许继续评测已持久化产物', () => {
+test('空模型正文或 Agent 预算超时允许继续评测已持久化产物', () => {
   const exhausted = new ProtocolError('Trial solver 失败', [
     'model gateway returned no final content after 1 attempt(s) (finish_reason=length)',
   ])
   exhausted.retryable = true
   assert.equal(solverFailureAllowsArtifactEvaluation(exhausted), true)
+  const timedOut = new ProtocolError('Trial solver 失败', [
+    'AgentBay 远端 Docker run 失败',
+    'exitCode=124',
+    'remote command timed out after 3600s',
+  ])
+  timedOut.retryable = false
+  assert.equal(solverFailureAllowsArtifactEvaluation(timedOut), true)
   assert.equal(solverFailureAllowsArtifactEvaluation(new ProtocolError('model gateway HTTP 401')), false)
 })
 

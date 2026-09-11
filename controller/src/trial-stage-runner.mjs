@@ -19,7 +19,18 @@ function safeText(value) {
   return text.replace(/sk-[A-Za-z0-9_-]{8,}/gu, '[REDACTED]').slice(-MAXIMUM_DIAGNOSTIC_CHARS)
 }
 
-export function retryableTrialError(error) {
+export function taskBudgetExhausted(error, stage = null) {
+  const text = [error?.message, ...(error?.details ?? [])].join('\n')
+  if (stage === 'verifier') return false
+  return /AgentBay 远端 Docker run 失败[\s\S]*exitCode=124[\s\S]*remote command timed out after \d+s/iu.test(text)
+    || error?.processResult?.timedOut === true
+}
+
+export function retryableTrialError(error, stage = null) {
+  // Solver/Updater 已实际占满整段运行预算属于 agent 结果，而不是基础设施
+  // 抖动。重复给予一整段预算既浪费资源，也会改变方法的有效 rollout 预算。
+  if (taskBudgetExhausted(error, stage)) return false
+  if (stage === 'verifier' && error?.processResult?.timedOut === true) return true
   if (typeof error?.retryable === 'boolean') return error.retryable
   const text = [error?.message, ...(error?.details ?? [])].join('\n')
   if (/HTTP\s+403\b[\s\S]*pre_consume_token_quota_failed/iu.test(text)) return true
@@ -30,8 +41,7 @@ export function retryableTrialError(error) {
   }
   // 配置、协议、权限、语法和安全校验失败无法靠重复执行恢复。
   if (/HTTP\s+(?:400|401|403|404|413|422)\b|ModuleNotFoundError|SyntaxError|PermissionError/iu.test(text)) return false
-  return error?.processResult?.timedOut === true
-    || /model gateway transient response failure|model gateway returned retryable HTTP|HTTP\s+(?:429|500|502|503|504)\b|ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|connection reset|timed out/iu.test(text)
+  return /model gateway transient response failure|model gateway returned retryable HTTP|model gateway[^\n]*(?:timed out|timeout)|HTTP\s+(?:429|500|502|503|504)\b|ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|connection reset/iu.test(text)
     || /AgentBay env upload failed: Upload exception|AgentBay output transfer failed|AgentBay bridge downloadDir 失败|SSL:\s*UNEXPECTED_EOF_WHILE_READING/iu.test(text)
     || /no final content.*finish_reason=(?:stop|missing|tool_calls|length)/su.test(text)
 }
@@ -46,7 +56,7 @@ export async function writeTrialFailure({ root, file, context, stage, attempt, e
     ...context,
     stage,
     attempt,
-    retryable: retryableTrialError(error),
+    retryable: retryableTrialError(error, stage),
     willRetry,
     error: {
       name: safeText(error?.name),
@@ -86,7 +96,7 @@ export async function runTrialStage({
     try {
       return await operation(attempt)
     } catch (cause) {
-      const willRetry = attempt < maximumAttempts && retryableTrialError(cause)
+      const willRetry = attempt < maximumAttempts && retryableTrialError(cause, stage)
       const diagnostic = await writeTrialFailure({
         root: trialRoot, file: `${stage}-${attempt}.json`, context,
         stage, attempt, error: cause, willRetry,
@@ -97,7 +107,8 @@ export async function runTrialStage({
           cause?.message ?? String(cause), ...(cause?.details ?? []), `diagnostic=${diagnostic}`,
         ])
         error.stage = stage
-        error.retryable = retryableTrialError(cause)
+        error.retryable = retryableTrialError(cause, stage)
+        if (cause?.processResult) error.processResult = cause.processResult
         throw error
       }
       await delay(Math.min(retryDelayMs * 2 ** (attempt - 1), 10000))

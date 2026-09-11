@@ -19,7 +19,12 @@ import { safeDockerName } from '../docker.mjs'
 import { withGlobalPermit } from '../global-concurrency.mjs'
 import { ProtocolError, validateResultRecords } from '../protocol.mjs'
 import { runProcess } from '../process.mjs'
-import { runTrialStage, trialProgress, writeTrialFailure } from '../trial-stage-runner.mjs'
+import {
+  runTrialStage,
+  taskBudgetExhausted,
+  trialProgress,
+  writeTrialFailure,
+} from '../trial-stage-runner.mjs'
 import {
   commitTrialCheckpoint,
   inspectTrialCheckpoint,
@@ -355,10 +360,11 @@ export function normalizeOmegaUseVerifierReward(result) {
 }
 
 export function solverFailureAllowsArtifactEvaluation(error) {
-  if (error?.retryable !== true) return false
-  return /model gateway returned no final content/iu.test([
+  const text = [
     error?.message, ...(error?.details ?? []),
-  ].join('\n'))
+  ].join('\n')
+  if (taskBudgetExhausted(error, 'solver')) return true
+  return error?.retryable === true && /model gateway returned no final content/iu.test(text)
 }
 
 function compactText(value, maximumBytes) {

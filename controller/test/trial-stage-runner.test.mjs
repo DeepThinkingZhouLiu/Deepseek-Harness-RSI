@@ -73,8 +73,30 @@ test('Trial 重试耗尽后抛错，不伪造 0 分；永久错误只运行一�
     const record = JSON.parse(await readFile(join(root, `diagnostics/verifier-${calls}.json`), 'utf8'))
     assert.equal(record.willRetry, false)
   }
-  assert.equal(retryableTrialError({ processResult: { timedOut: true } }), true)
+  assert.equal(retryableTrialError({ processResult: { timedOut: true } }), false)
+  assert.equal(retryableTrialError(new ProtocolError(
+    'AgentBay 远端 Docker run 失败',
+    ['exitCode=124', 'remote command timed out after 3600s'],
+  )), false)
+  assert.equal(retryableTrialError(new ProtocolError('model gateway request timed out')), true)
   assert.equal(retryableTrialError(new ProtocolError('无效的 Trace')), false)
+})
+
+test('Agent 用尽任务时间预算后不重试', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rsi-trial-agent-timeout-'))
+  let calls = 0
+  const error = new ProtocolError('AgentBay 远端 Docker run 失败', [
+    'exitCode=124',
+    'remote command timed out after 3600s',
+  ])
+  await assert.rejects(runTrialStage({
+    trialRoot: root, context, stage: 'solver', maximumAttempts: 5, retryDelayMs: 0,
+    operation: async () => { calls += 1; throw error },
+  }), /Trial solver 失败/u)
+  assert.equal(calls, 1)
+  const record = JSON.parse(await readFile(join(root, 'diagnostics/solver-1.json'), 'utf8'))
+  assert.equal(record.retryable, false)
+  assert.equal(record.willRetry, false)
 })
 
 test('Trial 可明确配置五次尝试，第五次仍失败则停止并保留全部记录', async () => {
