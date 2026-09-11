@@ -7,6 +7,9 @@ Qwen3.8-Max and seed `20260910`.
 - `h0-feedback.jsonl` contains the 90 task-level Feedback records in benchmark
   order, including reward, task instruction, solver answer, verifier feedback,
   latency, and artifact metadata.
+- `h0-selection.jsonl` contains the 30 task-level H0 Selection records in
+  benchmark order. GRHS experiments with the same frozen evaluation identity
+  can reuse these records instead of reevaluating H0 on Selection.
 - `feedback-packet.json` is the packet consumed by the first GRHS updater wave.
 - `.rsi/baseline-packs/cowork-90-feedback-grhs-qwen.json` is the canonical
   portable BaselinePack. Experiments with an identical H0, benchmark, solver,
@@ -23,5 +26,9 @@ Qwen3.8-Max and seed `20260910`.
 - Perfect rewards: 7
 - Minimum / median / maximum: 0 / 0 / 1
 - H0 Selection mean reward: 0.36054733333333344 over 30 cases
+- H0 Selection reward sum: 10.816420000000003
+- H0 Selection positive / zero / perfect rewards: 14 / 16 / 4
 
-The task-level scores are the `reward` field of each JSONL row.
+The task-level scores are the `reward` field of each JSONL row. For direct
+Controller reuse, reference the BaselinePack; the two JSONL files are the
+portable task-level records used to inspect and reproduce that pack.
