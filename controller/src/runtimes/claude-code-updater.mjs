@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 
 import { validateModelGatewayEnvironment } from '../cowork-model-gateway.mjs'
-import { MODEL_GATEWAY_RELAY_ORIGIN } from '../model-gateway-relay.mjs'
+import { allocateModelGatewayRelayPort } from '../model-gateway-relay.mjs'
 import { startModelGateway } from '../model-gateway.mjs'
 import { ProtocolError } from '../protocol.mjs'
 import { runProcess } from '../subprocess.mjs'
@@ -120,6 +120,8 @@ export function createClaudeCodeUpdaterDriver({
       if (!Number.isInteger(uid) || uid < 1 || !Number.isInteger(gid) || gid < 1) {
         throw new ProtocolError('Claude Code Updater 拒绝以 root 或未知宿主身份运行')
       }
+      const relayPort = await allocateModelGatewayRelayPort()
+      const relayOrigin = `http://127.0.0.1:${relayPort}`
 
       let gateway
       let result
@@ -137,7 +139,7 @@ export function createClaudeCodeUpdaterDriver({
           candidateApiKey: dummyKey,
           socketPath,
           // Anthropic SDK 会自行追加 /v1/messages?beta=true，因此这里必须传 Origin。
-          publicUrl: MODEL_GATEWAY_RELAY_ORIGIN,
+          publicUrl: relayOrigin,
           socketUid: uid,
           socketGid: gid,
           audit: async (record) => recordCliUsageAudit(measuredUsage, record),

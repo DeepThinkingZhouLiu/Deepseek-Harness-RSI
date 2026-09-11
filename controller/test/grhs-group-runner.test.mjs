@@ -109,14 +109,16 @@ test('GRHS 执行四个 sibling，Selection 只在完整组完成后返回 Winne
   assert.equal((await stat(checkpointPath)).mode & 0o777, 0o400)
 })
 
-test('GRHS 并行执行全部 Updater，再并行执行全部 Selection', async () => {
+test('GRHS 并行执行 sibling，并在各自 Updater 完成后立即启动 Selection', async () => {
   const groupRoot = await mkdtemp(join(tmpdir(), 'grhs-group-parallel-'))
   let updaterStarted = 0
   let selectionStarted = 0
   let releaseUpdaters
-  let releaseSelections
+  let firstSelectionStarted
+  let releaseRemainingUpdaters
   const updaterBarrier = new Promise((resolve) => { releaseUpdaters = resolve })
-  const selectionBarrier = new Promise((resolve) => { releaseSelections = resolve })
+  const firstSelection = new Promise((resolve) => { firstSelectionStarted = resolve })
+  const remainingUpdaterBarrier = new Promise((resolve) => { releaseRemainingUpdaters = resolve })
   const result = await executeGrhsGroup({
     strategy: strategy(),
     strategyContext: context(),
@@ -129,13 +131,15 @@ test('GRHS 并行执行全部 Updater，再并行执行全部 Selection', async 
       updaterStarted += 1
       if (updaterStarted === 4) releaseUpdaters()
       await updaterBarrier
-      assert.equal(selectionStarted, 0)
+      if (member.candidateId !== 'g001-grhs-s001-l3') await remainingUpdaterBarrier
       return { member }
     },
     async evaluateSibling(member) {
       selectionStarted += 1
-      if (selectionStarted === 4) releaseSelections()
-      await selectionBarrier
+      if (member.candidateId === 'g001-grhs-s001-l3') {
+        firstSelectionStarted()
+        releaseRemainingUpdaters()
+      } else await firstSelection
       return siblingResult(member)
     },
     async verifyCompletedSibling() {},

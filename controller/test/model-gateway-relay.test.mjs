@@ -9,15 +9,16 @@ import {
   MODEL_GATEWAY_RELAY_PORT,
   MODEL_GATEWAY_RELAY_ORIGIN,
   MODEL_GATEWAY_RELAY_URL,
+  allocateModelGatewayRelayPort,
   createModelGatewayRelay,
   relayWrappedInvocation,
 } from '../src/model-gateway-relay.mjs'
 
-function requestRelay() {
+function requestRelay(port) {
   return new Promise((resolve, reject) => {
     const request = http.request({
       host: '127.0.0.1',
-      port: MODEL_GATEWAY_RELAY_PORT,
+      port,
       path: '/v1/responses',
       method: 'POST',
       headers: { authorization: 'Bearer dummy', connection: 'close' },
@@ -57,16 +58,17 @@ test('relay forwards the fixed loopback endpoint only through its Unix socket', 
     upstream.listen(socketPath, resolve)
   })
   const relay = createModelGatewayRelay({ socketPath })
+  const relayPort = await allocateModelGatewayRelayPort()
   await new Promise((resolve, reject) => {
     relay.once('error', reject)
-    relay.listen(MODEL_GATEWAY_RELAY_PORT, '127.0.0.1', resolve)
+    relay.listen(relayPort, '127.0.0.1', resolve)
   })
   t.after(async () => {
     await new Promise((resolve) => relay.close(resolve))
     await new Promise((resolve) => upstream.close(resolve))
     await rm(root, { recursive: true, force: true })
   })
-  const response = await requestRelay()
+  const response = await requestRelay(relayPort)
   assert.deepEqual(response, { status: 201, body: '{"ok":true}' })
   assert.deepEqual(received, {
     method: 'POST',
@@ -84,11 +86,13 @@ test('relay wrapper preserves the original command as inert arguments', () => {
     nodePath: '/toolchain/bin/node',
     relayPath: '/controller/model-gateway-relay.mjs',
     socketPath: '/gateway/gateway.sock',
+    relayPort: 45555,
   })
   assert.equal(invocation.command, '/toolchain/bin/node')
   assert.deepEqual(invocation.args, [
     '/controller/model-gateway-relay.mjs',
     '/gateway/gateway.sock',
+    '45555',
     '/candidate/dsh',
     '--flag',
   ])

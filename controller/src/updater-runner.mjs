@@ -319,6 +319,7 @@ export function buildUpdaterInvocation({
         nodePath: node,
         relayPath: relaySourcePath,
         socketPath: gatewaySocketPath,
+        relayPort: Number(new URL(gatewayUrl).port),
       })
     : invocation
   return buildBubblewrapInvocation({

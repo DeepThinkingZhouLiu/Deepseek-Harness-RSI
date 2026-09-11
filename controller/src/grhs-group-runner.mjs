@@ -190,14 +190,12 @@ export async function executeGrhsGroup({
   const pending = entries.filter((entry) => !entry.reused)
   let executions
   if (stagedExecution) {
-    const preparations = await Promise.allSettled(
-      pending.map((entry) => prepareSibling(entry.member)),
-    )
-    const preparationFailure = preparations.find((outcome) => outcome.status === 'rejected')
-    if (preparationFailure) throw preparationFailure.reason
-    executions = pending.map((entry, index) => async () => (
-      await evaluateSibling(entry.member, preparations[index].value)
-    ))
+    // A sibling enters validation as soon as its own Updater finishes. Winner
+    // selection still waits for the complete group, preserving GRHS semantics.
+    executions = pending.map((entry) => async () => {
+      const prepared = await prepareSibling(entry.member)
+      return await evaluateSibling(entry.member, prepared)
+    })
   } else {
     executions = pending.map((entry) => async () => await runSibling(entry.member))
   }

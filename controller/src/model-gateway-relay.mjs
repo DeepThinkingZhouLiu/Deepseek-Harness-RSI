@@ -33,6 +33,34 @@ function validateSocketPath(value) {
   return resolve(value)
 }
 
+function validateRelayPort(value) {
+  if (!Number.isInteger(value) || value < 1 || value > 65535) {
+    throw protocolFailure('relay port must be 1..65535')
+  }
+  return value
+}
+
+/** Pick a free loopback port for one short-lived relay session. */
+export async function allocateModelGatewayRelayPort() {
+  const server = http.createServer()
+  await new Promise((accept, reject) => {
+    const onError = (error) => {
+      server.off('listening', onListening)
+      reject(error)
+    }
+    const onListening = () => {
+      server.off('error', onError)
+      accept()
+    }
+    server.once('error', onError)
+    server.once('listening', onListening)
+    server.listen(0, '127.0.0.1')
+  })
+  const port = validateRelayPort(server.address().port)
+  await new Promise((accept, reject) => server.close((error) => (error ? reject(error) : accept())))
+  return port
+}
+
 function validateChild(command, args) {
   if (typeof command !== 'string' || !isAbsolute(command) || /[\r\n\0]/u.test(command)
       || !Array.isArray(args) || args.some((argument) => typeof argument !== 'string')) {
@@ -74,8 +102,14 @@ export function createModelGatewayRelay({ socketPath }) {
   })
 }
 
-export async function runModelGatewayRelay({ socketPath, command, args = [] }) {
+export async function runModelGatewayRelay({
+  socketPath,
+  relayPort = MODEL_GATEWAY_RELAY_PORT,
+  command,
+  args = [],
+}) {
   const childInvocation = validateChild(command, args)
+  const port = validateRelayPort(relayPort)
   const server = createModelGatewayRelay({ socketPath })
   await new Promise((accept, reject) => {
     const onError = (error) => {
@@ -88,7 +122,7 @@ export async function runModelGatewayRelay({ socketPath, command, args = [] }) {
     }
     server.once('error', onError)
     server.once('listening', onListening)
-    server.listen(MODEL_GATEWAY_RELAY_PORT, '127.0.0.1')
+    server.listen(port, '127.0.0.1')
   })
 
   let child
@@ -115,7 +149,13 @@ export async function runModelGatewayRelay({ socketPath, command, args = [] }) {
   }
 }
 
-export function relayWrappedInvocation({ invocation, nodePath, relayPath, socketPath }) {
+export function relayWrappedInvocation({
+  invocation,
+  nodePath,
+  relayPath,
+  socketPath,
+  relayPort = MODEL_GATEWAY_RELAY_PORT,
+}) {
   if (!invocation || typeof invocation !== 'object' || Array.isArray(invocation)
       || typeof invocation.command !== 'string' || !Array.isArray(invocation.args)
       || typeof invocation.cwd !== 'string' || !invocation.env || typeof invocation.env !== 'object') {
@@ -128,14 +168,25 @@ export function relayWrappedInvocation({ invocation, nodePath, relayPath, socket
   return {
     ...invocation,
     command: resolve(nodePath),
-    args: [resolve(relayPath), validateSocketPath(socketPath), invocation.command, ...invocation.args],
+    args: [
+      resolve(relayPath),
+      validateSocketPath(socketPath),
+      String(validateRelayPort(relayPort)),
+      invocation.command,
+      ...invocation.args,
+    ],
   }
 }
 
 async function main() {
-  const [socketPath, command, ...args] = process.argv.slice(2)
+  const [socketPath, rawRelayPort, command, ...args] = process.argv.slice(2)
   if (command === undefined) throw protocolFailure('relay child command is required')
-  process.exitCode = await runModelGatewayRelay({ socketPath, command, args })
+  process.exitCode = await runModelGatewayRelay({
+    socketPath,
+    relayPort: validateRelayPort(Number(rawRelayPort)),
+    command,
+    args,
+  })
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -12,7 +12,7 @@ import { basename, dirname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 
 import { validateModelGatewayEnvironment } from '../cowork-model-gateway.mjs'
-import { MODEL_GATEWAY_RELAY_URL } from '../model-gateway-relay.mjs'
+import { allocateModelGatewayRelayPort } from '../model-gateway-relay.mjs'
 import { ProtocolError } from '../protocol.mjs'
 import { runProcess } from '../subprocess.mjs'
 import {
@@ -118,6 +118,8 @@ export function createCodexUpdaterDriver({
         throw new ProtocolError('Codex Updater 宿主身份无效')
       }
       const privilegedHost = uid === 0
+      const relayPort = await allocateModelGatewayRelayPort()
+      const relayUrl = `http://127.0.0.1:${relayPort}/v1`
 
       let gateway
       let result
@@ -134,7 +136,7 @@ export function createCodexUpdaterDriver({
           maxConcurrency: 1,
           candidateApiKey: dummyKey,
           socketPath,
-          publicUrl: MODEL_GATEWAY_RELAY_URL,
+          publicUrl: relayUrl,
           socketUid: uid,
           socketGid: gid,
           audit: async (record) => recordCliUsageAudit(measuredUsage, record),

@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { MODEL_GATEWAY_RELAY_ORIGIN } from '../src/model-gateway-relay.mjs'
 import { createClaudeCodeUpdaterDriver } from '../src/runtimes/claude-code-updater.mjs'
 
 function fixtureDistributionDigest(files) {
@@ -94,7 +93,7 @@ test('Claude Code Updater 固定 distribution，通过 Anthropic Gateway 隔离�
       startGateway: async (options) => {
         gatewayOptions = options
         return {
-          url: MODEL_GATEWAY_RELAY_ORIGIN,
+          url: options.publicUrl,
           socketPath: options.socketPath,
           async close() {},
         }
@@ -153,7 +152,7 @@ test('Claude Code Updater 固定 distribution，通过 Anthropic Gateway 隔离�
     assert.equal(invocation.env.RSI_CLAUDE_PROVIDER_API_KEY, undefined)
     assert.equal(invocation.env.RSI_CLAUDE_PROVIDER_BASE_URL, undefined)
     assert.equal(invocation.env.ANTHROPIC_API_KEY, invocation.env.RSI_MODEL_GATEWAY_DUMMY_KEY)
-    assert.equal(invocation.env.ANTHROPIC_BASE_URL, MODEL_GATEWAY_RELAY_ORIGIN)
+    assert.match(invocation.env.ANTHROPIC_BASE_URL, /^http:\/\/127\.0\.0\.1:\d+$/u)
     assert.ok(invocation.args.includes('--unshare-net'))
     assert.ok(invocation.args.includes('--keep-groups'))
     assert.ok(invocation.args.includes('--proc'))

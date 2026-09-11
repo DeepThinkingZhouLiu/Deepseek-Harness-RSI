@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
-import { MODEL_GATEWAY_RELAY_URL } from '../src/model-gateway-relay.mjs'
 import { createCodexUpdaterDriver } from '../src/runtimes/codex-updater.mjs'
 
 function fixtureDistributionDigest(files) {
@@ -85,7 +84,7 @@ test('Codex Updater 固定 distribution，通过 Responses Gateway 隔离修改 
         async rotateRoleToken(role) { rotations.push(role) },
       },
       startGateway: async (options) => ({
-        url: MODEL_GATEWAY_RELAY_URL,
+        url: options.publicUrl,
         socketPath: options.socketPath,
         async close() {},
       }),
@@ -149,6 +148,7 @@ test('Codex Updater 固定 distribution，通过 Responses Gateway 隔离修改 
     assert.deepEqual(result.report.changedFiles, ['agent.py'])
     assert.equal(invocation.env.RSI_PROVIDER_API_KEY, undefined)
     assert.equal(invocation.env.RSI_PROVIDER_BASE_URL, undefined)
+    assert.match(invocation.env.RSI_MODEL_GATEWAY_URL, /^http:\/\/127\.0\.0\.1:\d+\/v1$/u)
     assert.equal(invocation.env.PYTHONDONTWRITEBYTECODE, '1')
     assert.equal(invocation.env.PYTHONPYCACHEPREFIX, '/work/tmp/python-cache')
     if (process.getuid?.() === 0) {
