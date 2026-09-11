@@ -553,6 +553,30 @@ export async function createBaselineRuntime({
       return result.report
     },
 
+    async curateBatch({ state, cases, iteration, budget }) {
+      const prompt = [
+        'You are the Reflector and Curator for Batched ACE.',
+        'The feedback packet contains one deterministic shard of trajectories produced by the shared H0.',
+        'Extract reusable lessons from task instructions, solver traces, artifacts, and verifier feedback.',
+        'Update only the playbook through concise incremental ADD operations; do not edit candidate files.',
+        'Avoid duplicating advice already present in the current playbook.',
+        `This is batch ${iteration} of ${budget}.`,
+        '',
+        'Current playbook:',
+        renderPlaybook(state),
+        '',
+        'Return JSON with fields reasoning and operations. Each operation must have type="ADD", section, and content.',
+      ].join('\n')
+      const result = await codingSession({
+        current: h0,
+        prompt,
+        evidence: { partition: 'feedback', iteration, batchCount: budget, cases },
+        writable: false,
+        id: `ace-batched-curate-${++session}`,
+      })
+      return result.report
+    },
+
     materializePlaybook: ({ current, state, iteration }) => withPlaybook(
       current,
       state,

@@ -25,7 +25,8 @@ const additions = [{
 }]
 
 test('baseline methods are explicit, independently registered components', () => {
-  assert.deepEqual(baselineMethodIds, ['ace', 'evo-bench'])
+  assert.deepEqual(baselineMethodIds, ['ace-batched', 'ace', 'evo-bench'])
+  assert.equal(getBaselineMethod('ace-batched').id, 'ace-batched')
   assert.equal(getBaselineMethod('ace').id, 'ace')
   assert.equal(getBaselineMethod('evo-bench').id, 'evo-bench')
   assert.throws(() => getBaselineMethod('unknown'), /Unknown baseline method/u)
@@ -171,6 +172,45 @@ test('ACE full-pass traversal consumes every feedback task across bounded checkp
   })
   assert.deepEqual([...new Set(visited)], taskIds)
   assert.equal(visited.length, taskIds.length * 2)
+})
+
+test('Batched ACE reuses one H0 Feedback pass across deterministic playbook updates', async () => {
+  const taskIds = Array.from({ length: 9 }, (_, index) => `task-${index + 1}`)
+  const batches = []
+  let feedbackRuns = 0
+  const runtime = {
+    initialize: async () => ({ id: 'h0' }),
+    checkBudget: async () => {},
+    reserveCandidate: async () => {},
+    selection: async () => ({ meanReward: 0.5, count: 30 }),
+    promotion: async () => true,
+    assertCandidate: async () => {},
+    feedback: async (_candidate, ids) => {
+      feedbackRuns += 1
+      return ids.map((instanceId) => ({ instanceId }))
+    },
+    curateBatch: async ({ cases }) => {
+      batches.push(cases.map((record) => record.instanceId))
+      return {
+        operations: cases.map((record) => ({
+          type: 'ADD', section: 'OTHERS', content: record.instanceId,
+        })),
+      }
+    },
+    materializePlaybook: async ({ iteration }) => ({ id: `c${iteration}` }),
+    checkpoint: async () => {},
+    freeze: async ({ champion }) => ({ championId: champion.id }),
+  }
+  await runBaseline({
+    method: 'ace-batched',
+    budget: 4,
+    feedbackIds: taskIds,
+    feedbackTraversal: 'full-pass',
+    runtime,
+  })
+  assert.equal(feedbackRuns, 1)
+  assert.deepEqual(batches.map((batch) => batch.length), [2, 2, 2, 3])
+  assert.deepEqual(batches.flat(), taskIds)
 })
 
 test('ACE parallel feedback runs a frozen minibatch and merges updates deterministically', async () => {

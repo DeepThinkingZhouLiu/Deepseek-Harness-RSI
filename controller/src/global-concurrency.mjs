@@ -91,6 +91,37 @@ async function releaseSlot(slotPath, roleRoot, owner, nonce, role) {
 
 async function reclaimStaleSlot(slotPath, roleRoot) {
   if (!await staleOwner(slotPath)) return false
+  // 多个 waiter 可能同时观察到同一个旧 owner。先用槽位内的独占目录取得
+  // 回收权，再重新检查；否则较慢的 waiter 可能把刚创建的新租约一起移走。
+  const reclaimLock = join(slotPath, '.reclaim')
+  try {
+    await mkdir(reclaimLock, { mode: 0o700 })
+  } catch (error) {
+    if (['ENOENT', 'EEXIST'].includes(error?.code)) return false
+    throw error
+  }
+  let stillStale = await staleOwner(slotPath)
+  if (!stillStale) {
+    // 空死槽的 mtime 会因创建回收锁而刷新。短暂等待 owner 写入，可区分
+    // 正在创建的新租约和确实没有 owner 的旧空槽。
+    try {
+      await readFile(join(slotPath, 'owner.json'), 'utf8')
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 25))
+      try {
+        await readFile(join(slotPath, 'owner.json'), 'utf8')
+        stillStale = false
+      } catch (retryError) {
+        if (retryError?.code !== 'ENOENT') throw retryError
+        stillStale = true
+      }
+    }
+  }
+  if (!stillStale) {
+    await rm(reclaimLock, { recursive: true, force: true })
+    return false
+  }
   const quarantine = join(roleRoot, `.stale-${randomUUID()}`)
   try {
     await rename(slotPath, quarantine)

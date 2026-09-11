@@ -9,6 +9,8 @@
 ## 组件结构
 
 - `controller/src/baselines/methods/ace.mjs`：ACE 方法生命周期。
+- `controller/src/baselines/methods/ace-batched.mjs`：一次 H0 Feedback、四个固定
+  evidence shard、仅更新 playbook 的快速 Batched ACE-B4。
 - `controller/src/baselines/methods/evo-bench.mjs`：Evo-Bench Evolver 方法生命周期。
 - `controller/src/baselines/methods/index.mjs`：方法注册表。增删 baseline 只需调整对应
   方法文件和一条注册项。
@@ -20,6 +22,10 @@
 ACE 按 Generator → Reflector → 失败重试 → Curator → post-curation Generator
 运行；唯一演化状态是追加到 `profiles/cowork.md` 的 playbook。串行 Curator 只执行
 ADD，bullet 计数由 Controller 维护。
+
+Batched ACE-B4 只运行一次公共 H0 Feedback，将 90 条证据确定性分成四组，依次执行
+四次 Reflector/Curator 合并更新；每个候选之间只持久化 `profiles/cowork.md`。该模式
+用于预算匹配实验，不应表述为 ACE 官方逐题训练的完全复现。
 
 Evo-Bench Evolver 读取最新一轮完整 Feedback 和累积的结构化历史，每个 Candidate 调用一次 Codex session 修改可执行
 harness。分数下降后仍从最新有效版本继续研究，同时由 Controller 独立保留 Selection

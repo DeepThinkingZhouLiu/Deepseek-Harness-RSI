@@ -1,8 +1,10 @@
 import { ProtocolError } from '../../protocol.mjs'
+import { aceBatchedMethod } from './ace-batched.mjs'
 import { aceMethod } from './ace.mjs'
 import { evoBenchMethod } from './evo-bench.mjs'
 
 const methods = new Map([
+  [aceBatchedMethod.id, aceBatchedMethod],
   [aceMethod.id, aceMethod],
   [evoBenchMethod.id, evoBenchMethod],
 ])

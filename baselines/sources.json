@@ -1,4 +1,15 @@
 {
+  "ace-batched": {
+    "paper": "https://arxiv.org/abs/2510.04618",
+    "repository": "https://github.com/ace-agent/ace",
+    "implementation": "ACE-inspired deterministic batch adaptation over one shared H0 Feedback pass",
+    "variant": "four sequential playbook-only delta updates over fixed Feedback shards",
+    "adaptations": [
+      "The H0 Generator trajectories are collected once and reused across the four update steps.",
+      "Each step combines reflection and curation into one read-only updater session.",
+      "Only profiles/cowork.md is materialized as persistent mutable state."
+    ]
+  },
   "ace": {
     "paper": "https://arxiv.org/abs/2510.04618",
     "repository": "https://github.com/ace-agent/ace",

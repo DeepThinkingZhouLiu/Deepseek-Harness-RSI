@@ -23,6 +23,11 @@ export function retryableTrialError(error) {
   if (typeof error?.retryable === 'boolean') return error.retryable
   const text = [error?.message, ...(error?.details ?? [])].join('\n')
   if (/HTTP\s+403\b[\s\S]*pre_consume_token_quota_failed/iu.test(text)) return true
+  // 全局并发槽位属于可重新获取的基础设施租约。槽位在释放边界丢失或被
+  // 回收时，下一次尝试会重新申请，不应把该题永久标记为失败。
+  if (/全局\s+(?:solver|updater)\s+并发令牌丢失|Global\s+(?:solver|updater)\s+concurrency lease (?:owner mismatch|is missing)|ENOENT:[^\n]*global-concurrency[^\n]*owner\.json/iu.test(text)) {
+    return true
+  }
   // 配置、协议、权限、语法和安全校验失败无法靠重复执行恢复。
   if (/HTTP\s+(?:400|401|403|404|413|422)\b|ModuleNotFoundError|SyntaxError|PermissionError/iu.test(text)) return false
   return error?.processResult?.timedOut === true

@@ -57,6 +57,9 @@ test('Trial 重试耗尽后抛错，不伪造 0 分；永久错误只运行一�
     ['model gateway returned no final content after 1 attempt(s) (finish_reason=length)', 3],
     ['AgentBay env upload failed: Upload exception: [SSL: UNEXPECTED_EOF_WHILE_READING]', 3],
     ['AgentBay output transfer failed; remote results retained: AgentBay bridge downloadDir 失败', 3],
+    ['全局 solver 并发令牌丢失', 3],
+    ['Global solver concurrency lease owner mismatch', 3],
+    ["ENOENT: no such file or directory, open '/run/global-concurrency/solver/slot-001/owner.json'", 3],
     ['model gateway HTTP 401', 1],
     ['ModuleNotFoundError: upstream_verifier', 1],
   ]) {
