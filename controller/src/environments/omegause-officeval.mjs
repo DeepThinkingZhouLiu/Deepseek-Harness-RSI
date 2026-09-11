@@ -275,10 +275,26 @@ export async function recoverableSolverWorkspace(previousTrialRoot, before, limi
     .filter((entry) => entry.isDirectory() && /^solver-attempt-[1-5]$/u.test(entry.name))
     .sort((left, right) => Number(right.name.slice(15)) - Number(left.name.slice(15)))
     .map((entry) => join(previousTrialRoot, entry.name, 'workspace'))
-  for (const candidate of [join(previousTrialRoot, 'workspace'), ...archived]) {
+  const candidates = [join(previousTrialRoot, 'workspace'), ...archived]
+  let latestWorkspace = null
+  for (const candidate of candidates) {
     const info = await lstat(candidate).catch(() => null)
     if (!info?.isDirectory()) continue
+    latestWorkspace ??= candidate
     if (changedArtifacts(before, await snapshotWorkspace(candidate, limits)).length > 0) return candidate
+  }
+  const diagnostics = join(previousTrialRoot, 'diagnostics')
+  const diagnosticNames = await readdir(diagnostics).catch(error => {
+    if (error.code === 'ENOENT') return []
+    throw error
+  })
+  for (const name of diagnosticNames.filter(name => /^solver-[1-5]\.json$/u.test(name))) {
+    const record = JSON.parse(await readFile(join(diagnostics, name), 'utf8'))
+    if (taskBudgetExhausted({
+      message: record.error?.message,
+      details: record.error?.details,
+      processResult: record.error?.process,
+    }, 'solver')) return latestWorkspace
   }
   return null
 }

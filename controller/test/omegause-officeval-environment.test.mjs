@@ -65,6 +65,24 @@ test('Controller 升级恢复最近一次有产物的 Solver 工作区', async (
   assert.equal(recovered, join(root, 'solver-attempt-4', 'workspace'))
 })
 
+test('Controller 升级把 Agent 超时且无产物视为空交付，不重新运行 Solver', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'harness-rsi-empty-timeout-recovery-'))
+  await mkdir(join(root, 'workspace'))
+  await mkdir(join(root, 'diagnostics'))
+  await writeFile(join(root, 'diagnostics', 'solver-1.json'), JSON.stringify({
+    error: {
+      message: 'AgentBay 远端 Docker run 失败',
+      details: ['exitCode=124', 'remote command timed out after 3600s'],
+    },
+  }))
+  const recovered = await recoverableSolverWorkspace(root, new Map(), {
+    maximumFiles: 10,
+    maximumBytes: 1024,
+    maximumFileBytes: 1024,
+  })
+  assert.equal(recovered, join(root, 'workspace'))
+})
+
 test('OmegaUse 单题失败后停止派发新题，等待已有题安全收尾', async () => {
   const started = []
   let drained = false
