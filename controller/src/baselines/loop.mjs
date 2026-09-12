@@ -63,7 +63,11 @@ export async function runBaseline({
       await runtime.checkBudget()
       await runtime.reserveCandidate(iteration)
       consumed += 1
-      const proposed = await method.propose({
+      let proposed
+      let proposalError
+      for (let attempt = 1; attempt <= 3 && !proposed; attempt += 1) {
+        try {
+          proposed = await method.propose({
         runtime,
         current,
         feedbackIds,
@@ -75,7 +79,19 @@ export async function runBaseline({
         history: structuredClone(history),
         maximumReflectionRounds,
         feedbackTraversal,
-      })
+          })
+        } catch (error) {
+          proposalError = error
+          if (attempt < 3) continue
+        }
+      }
+      if (!proposed) {
+        history.push({ iteration, parentId: current.id, status: 'error', report: {
+          message: proposalError?.message ?? 'proposal failed',
+        } })
+        await runtime.checkpoint({ iteration, current, champion, championSelection, history, methodState })
+        continue
+      }
       methodState = proposed.state
       const { candidate, report } = proposed
       if (!candidate) {
@@ -109,9 +125,12 @@ export async function runBaseline({
       })
       evidence = nextEvidence.evidence ?? nextEvidence
     } catch (error) {
-      if (!(error instanceof BaselineBudgetExhausted)) throw error
-      stopReason = error.message
-      break
+      if (error instanceof BaselineBudgetExhausted) {
+        stopReason = error.message
+        break
+      }
+      history.push({ iteration, parentId: current.id, status: 'error', report: { message: error.message } })
+      await runtime.checkpoint({ iteration, current, champion, championSelection, history, methodState })
     }
   }
 
