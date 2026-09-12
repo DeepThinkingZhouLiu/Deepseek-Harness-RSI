@@ -66,8 +66,9 @@ export class BaselineCoworkEnvironment {
     model,
     seed,
     checkBudget,
+    evidencePartitions = ['feedback'],
   }) {
-    Object.assign(this, { release, model, seed, checkBudget })
+    Object.assign(this, { release, model, seed, checkBudget, evidencePartitions })
     this.finalAuthorization = null
     this.trials = 0
     this.native = new CoworkBenchEnvironment({
@@ -99,7 +100,7 @@ export class BaselineCoworkEnvironment {
         && this.finalAuthorization?.get(candidate.id) !== candidate.digest) {
       throw new ProtocolError('Sealed Final is unavailable before candidate freeze')
     }
-    if (row.partition !== 'feedback' && reflection !== null) {
+    if (!this.evidencePartitions.includes(row.partition) && reflection !== null) {
       throw new ProtocolError('Reflection is training-only')
     }
     if (treeDigest(await snapshotTree(candidate.workspace)) !== candidate.digest) {
@@ -174,7 +175,7 @@ export class BaselineCoworkEnvironment {
         domain: row.domain,
         trialRoot: artifactRoot ? resolve(this.native.runRoot, artifactRoot) : null,
       }
-      if (partition === 'feedback') {
+      if (this.evidencePartitions.includes(partition)) {
         Object.assign(result, {
           instruction: record.feedback.taskInstruction,
           trace: record.feedback.solverAnswer,

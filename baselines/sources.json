@@ -31,5 +31,16 @@
       "Feedback is detailed, Selection is aggregate-only, and Final remains sealed.",
       "The current revision continues after regressions while the best Selection checkpoint is frozen."
     ]
+  },
+  "evo-bench-paper": {
+    "paper": "https://arxiv.org/abs/2608.09096",
+    "repository": "https://github.com/RUCAIBox/Evo-Bench",
+    "implementation": "controller/src/baselines/methods/evo-bench-paper.mjs",
+    "variant": "Paper-shaped validation-only control with held-out final evaluation",
+    "adaptations": [
+      "The initial 90-task H0 Feedback evidence is collected once or reused from disk; each of four updates is validated on the fixed 30-task Selection partition.",
+      "The existing MSA policy solver and Cowork verifier provide policy rollouts.",
+      "The updater driver stands in for the paper's evolver model; the controller enforces the validation-only signal and freeze boundary."
+    ]
   }
 }

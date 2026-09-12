@@ -25,10 +25,11 @@ const additions = [{
 }]
 
 test('baseline methods are explicit, independently registered components', () => {
-  assert.deepEqual(baselineMethodIds, ['ace-batched', 'ace', 'evo-bench'])
+  assert.deepEqual(baselineMethodIds, ['ace-batched', 'ace', 'evo-bench', 'evo-bench-paper'])
   assert.equal(getBaselineMethod('ace-batched').id, 'ace-batched')
   assert.equal(getBaselineMethod('ace').id, 'ace')
   assert.equal(getBaselineMethod('evo-bench').id, 'evo-bench')
+  assert.equal(getBaselineMethod('evo-bench-paper').id, 'evo-bench-paper')
   assert.throws(() => getBaselineMethod('unknown'), /Unknown baseline method/u)
 })
 
@@ -141,6 +142,102 @@ test('Evo-Bench continues from regressions while retaining a separate champion',
   assert.deepEqual(seen.reservations, [1, 2, 3])
   assert.equal(result.frozen.championId, 'c1')
   assert.equal(seen.freezes[0].current.id, 'c3')
+})
+
+test('EvoBench reuses fixed H0 evidence across four rounds on the same Selection suite', async () => {
+  const { runtime, seen } = fakeRuntime([0.5, 0.7, 0.4, 0.6, 0.8])
+  const feedbackIds = Array.from({ length: 90 }, (_, index) => `feedback-${index}`)
+  const validationIds = Array.from({ length: 30 }, (_, index) => `selection-${index}`)
+  const validations = []
+  const evolve = runtime.evolve
+  runtime.validationPartition = 'selection'
+  runtime.validation = async (candidate, ids) => {
+    validations.push([candidate.id, ids])
+    const score = await runtime.selection(candidate)
+    return ids.map((instanceId) => ({ instanceId, reward: score.meanReward }))
+  }
+  runtime.evolve = async (options) => {
+    assert.equal(options.evidence[0].candidateId, 'h0')
+    assert.equal(options.history.length, options.iteration - 1)
+    return evolve(options)
+  }
+  const result = await runBaseline({
+    method: 'evo-bench-paper', budget: 4, feedbackIds, validationIds, runtime,
+  })
+  assert.deepEqual(seen.feedback, [['h0', feedbackIds]])
+  assert.deepEqual(validations, ['h0', 'c1', 'c2', 'c3', 'c4'].map((id) => [id, validationIds]))
+  assert.deepEqual(seen.parents, ['h0', 'c1', 'c2', 'c3'])
+  assert.equal(result.scorePartition, 'selection')
+  assert.equal(result.frozen.championId, 'c4')
+  assert.ok(Math.abs(result.championSelection.meanReward - 0.8) < 1e-12)
+  assert.equal(result.championSelection.count, 30)
+})
+
+test('baseline retries failed proposals three times and continues from the last evaluated parent', async () => {
+  const { runtime, seen } = fakeRuntime([0.5, 0.6, 0.7, 0.8])
+  const attempts = [0, 0, 0, 0]
+  const evolve = runtime.evolve
+  runtime.evolve = async (options) => {
+    attempts[options.iteration] += 1
+    if (options.iteration === 1 && attempts[1] < 3) throw new Error('temporary updater failure')
+    if (options.iteration === 2) throw new Error('updater unavailable')
+    return evolve(options)
+  }
+  await runBaseline({ method: 'evo-bench', budget: 3, feedbackIds: ['train'], runtime })
+  assert.deepEqual(attempts.slice(1), [3, 3, 1])
+  assert.deepEqual(seen.parents, ['h0', 'c1'])
+  const history = seen.freezes[0].history
+  assert.equal(history.length, 3)
+  assert.equal(history[1].status, 'error')
+  assert.equal(history[2].parentId, 'c1')
+})
+
+test('baseline does not retry an exhausted updater budget', async () => {
+  const { runtime } = fakeRuntime([0.5])
+  let attempts = 0
+  runtime.evolve = async () => {
+    attempts += 1
+    throw new BaselineBudgetExhausted('updater budget')
+  }
+  const result = await runBaseline({ method: 'evo-bench', budget: 4, feedbackIds: ['train'], runtime })
+  assert.equal(attempts, 1)
+  assert.equal(result.frozen.championId, 'h0')
+  assert.equal(result.stopReason, 'updater budget')
+})
+
+test('baseline preserves the previous parent when candidate evaluation fails', async () => {
+  const { runtime, seen } = fakeRuntime([0.5, 0.7, 0.8])
+  const selection = runtime.selection
+  const evidenceParents = []
+  const evolve = runtime.evolve
+  runtime.selection = async (candidate) => {
+    if (candidate.id === 'c1') throw new Error('evaluation interrupted')
+    return selection(candidate)
+  }
+  runtime.evolve = async (options) => {
+    evidenceParents.push(options.evidence[0].candidateId)
+    return evolve(options)
+  }
+  await runBaseline({ method: 'evo-bench', budget: 2, feedbackIds: ['train'], runtime })
+  assert.deepEqual(seen.parents, ['h0', 'h0'])
+  assert.deepEqual(evidenceParents, ['h0', 'h0'])
+  assert.equal(seen.freezes[0].history[0].status, 'error')
+})
+
+test('baseline propagates checkpoint failures without duplicating history', async () => {
+  const { runtime, seen } = fakeRuntime([0.5, 0.7])
+  let checkpoints = 0
+  runtime.checkpoint = async ({ history }) => {
+    checkpoints += 1
+    assert.equal(history.length, 1)
+    throw new Error('checkpoint write failed')
+  }
+  await assert.rejects(
+    runBaseline({ method: 'evo-bench', budget: 2, feedbackIds: ['train'], runtime }),
+    /checkpoint write failed/u,
+  )
+  assert.equal(checkpoints, 1)
+  assert.equal(seen.freezes.length, 0)
 })
 
 test('ACE full-pass traversal consumes every feedback task across bounded checkpoints', async () => {

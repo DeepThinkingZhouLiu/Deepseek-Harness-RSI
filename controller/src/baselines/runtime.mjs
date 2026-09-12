@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { dirname, join, relative, resolve } from 'node:path'
 
 import {
   validateEnvironmentAdapter,
@@ -75,6 +75,20 @@ export async function loadBaselineConfiguration(path, repositoryRoot) {
       && !['paired', 'winner-only'].includes(config.finalCandidates)) {
     throw new ProtocolError('Invalid baseline finalCandidates')
   }
+  if (config.method === 'evo-bench-paper') {
+    const protocol = config.evoBenchProtocol
+    if (!protocol || !['feedback', 'selection'].includes(protocol.validationPartition)
+        || protocol.evaluationPartition !== 'final'
+        || protocol.maxIterations < 1 || protocol.maxSteps !== 1000
+        || config.candidateBudget !== protocol.maxIterations
+        || config.maximumWallSeconds !== 172800
+        || config.maximumUpdaterRequests !== protocol.maxSteps) {
+      throw new ProtocolError(
+        'Paper Evo-Bench requires a configured validation iteration budget, '
+        + '1000 updater steps, and a 48-hour wall-clock budget',
+      )
+    }
+  }
   const readAdapter = (name) => readConfigFile(resolveInside(
     repositoryRoot,
     config.adapters[name],
@@ -119,8 +133,16 @@ export async function loadBaselineConfiguration(path, repositoryRoot) {
     config.policy,
     'policy',
   )))
-  if (policy.decisionPartition !== 'selection' || policy.primaryMetric !== 'mean-reward') {
-    throw new ProtocolError('Cowork baselines require the selection mean-reward policy')
+  const paperProtocol = config.method === 'evo-bench-paper'
+  const expectedPartition = paperProtocol
+    ? config.evoBenchProtocol.validationPartition
+    : 'selection'
+  if (policy.decisionPartition !== expectedPartition || policy.primaryMetric !== 'mean-reward') {
+    throw new ProtocolError(
+      paperProtocol
+        ? `Paper Evo-Bench requires the ${expectedPartition} mean-reward policy`
+        : 'Cowork baselines require the selection mean-reward policy',
+    )
   }
   return {
     config,
@@ -153,9 +175,13 @@ export async function createBaselineRuntime({
   repositoryRoot,
   runRoot,
   resumeH0 = false,
+  reuseH0FeedbackPath = null,
   onEvent = () => {},
 }) {
   const { config, target, updater, provider, infrastructure, prompts } = bundle
+  const validationPartition = config.method === 'evo-bench-paper'
+    ? config.evoBenchProtocol.validationPartition
+    : 'feedback'
   const source = await resolveTargetSource({
     repositoryRoot,
     source: target.source,
@@ -198,6 +224,7 @@ export async function createBaselineRuntime({
   let reserved = 0
   let h0
   let h0Prompt
+  let reusableH0Feedback = null
   const selections = new Map()
   const benchmark = release.benchmark
   const selectedTasks = new Set()
@@ -223,6 +250,7 @@ export async function createBaselineRuntime({
     docker,
     solver,
     model: config.models.solver,
+    evidencePartitions: ['feedback', validationPartition],
     seed: config.seed,
     checkBudget: async () => {
       if (solver.usage().requests + target.solver.runtime.maximumSteps
@@ -236,6 +264,66 @@ export async function createBaselineRuntime({
   async function snapshot(id, workspace) {
     const tree = await snapshotTree(workspace, target.mutation.limits)
     return { id, workspace, digest: treeDigest(tree) }
+  }
+
+  async function loadReusableH0Feedback(pathValue) {
+    const cachePath = resolve(pathValue)
+    const cacheRoot = dirname(dirname(cachePath))
+    const identityPath = join(cacheRoot, 'identity.json')
+    const identity = JSON.parse(await readFile(identityPath, 'utf8'))
+    if (identity.release !== release.id
+        || identity.sourceRevision !== source.revision
+        || identity.experiment?.seed !== config.seed
+        || JSON.stringify(identity.experiment?.models) !== JSON.stringify(config.models)
+        || identity.h0?.digest !== h0.digest) {
+      throw new ProtocolError('Reusable H0 Feedback does not match benchmark, source, seed, model, or H0')
+    }
+    const rows = (await readFile(cachePath, 'utf8')).trim().split(/\r?\n/u)
+      .filter(Boolean).map((line, index) => {
+        try {
+          return JSON.parse(line)
+        } catch (error) {
+          throw new ProtocolError(`Reusable H0 Feedback line ${index + 1} is invalid`, [error.message])
+        }
+      })
+    const expectedIds = release.partitions.feedback.map((row) => row.instance_id)
+    if (rows.length !== expectedIds.length
+        || new Set(rows.map((row) => row.instance_id)).size !== rows.length
+        || !expectedIds.every((id) => rows.some((row) => row.instance_id === id))) {
+      throw new ProtocolError('Reusable H0 evidence does not cover the fixed Feedback partition')
+    }
+    const records = new Map()
+    for (const row of rows) {
+      if (!Number.isFinite(row.reward) || row.reward < 0 || row.reward > 1
+          || !['resolved', 'unresolved'].includes(row.status)) {
+        throw new ProtocolError(`Reusable H0 Feedback record is invalid: ${row.instance_id}`)
+      }
+      const artifactRoot = row.artifacts?.[0]?.root
+      const sourceTrialRoot = artifactRoot ? resolve(cacheRoot, artifactRoot) : null
+      if (!sourceTrialRoot) throw new ProtocolError(`Reusable H0 Feedback has no artifacts: ${row.instance_id}`)
+      await stat(join(sourceTrialRoot, 'submission'))
+      const trialRoot = join(runRoot, 'reused-feedback', String(records.size).padStart(3, '0'))
+      await mkdir(trialRoot, { recursive: true })
+      await copyRegularTree(
+        join(sourceTrialRoot, 'submission'),
+        join(trialRoot, 'submission'),
+      )
+      const releaseRow = release.all.get(row.instance_id)
+      records.set(row.instance_id, {
+        instanceId: row.instance_id,
+        reward: row.reward,
+        correct: row.status === 'resolved',
+        candidateId: 'h0',
+        seedControlled: row.seed_controlled,
+        domain: releaseRow.domain,
+        trialRoot,
+        instruction: row.feedback?.taskInstruction ?? null,
+        trace: row.feedback?.solverAnswer ?? null,
+        answer: row.feedback?.solverAnswer ?? null,
+        verifier: row.feedback?.verifierFeedback ?? null,
+      })
+    }
+    return records
   }
 
   async function assertCandidate(candidate) {
@@ -381,6 +469,7 @@ export async function createBaselineRuntime({
   }
 
   const runtime = {
+    validationPartition,
     async preflight() {
       await docker.info()
       const environmentStatus = await environment.preflight()
@@ -427,6 +516,10 @@ export async function createBaselineRuntime({
           sourceRevision: source.revision,
           h0,
         })
+      }
+      if (reuseH0FeedbackPath) {
+        reusableH0Feedback = await loadReusableH0Feedback(reuseH0FeedbackPath)
+        onEvent(`reusing H0 Feedback evidence ${reusableH0Feedback.size}/${release.partitions.feedback.length}`)
       }
       return h0
     },
@@ -490,10 +583,33 @@ export async function createBaselineRuntime({
         }
         selectedTasks.add(id)
       }
+      if (candidate.id === 'h0' && reusableH0Feedback) {
+        return ids.map((id) => reusableH0Feedback.get(id))
+      }
       const completeFeedback = ids.length === release.partitions.feedback.length
         && ids.every((id) => release.partitions.feedback.some((row) => row.instance_id === id))
       return completeFeedback
         ? await environment.runPartition(candidate, 'feedback')
+        : await environment.runTasks(candidate, ids)
+    },
+
+    async validation(candidate, ids) {
+      if (config.method === 'evo-bench-paper') {
+        const iteration = Number(/^evo-(\d+)$/u.exec(candidate.id)?.[1] ?? 0)
+        baselineEnvironment.task.maximumConcurrentTrials = Math.min(
+          infrastructure.task.maximumConcurrentTrials,
+          config.maximumConcurrentTrials ?? infrastructure.task.maximumConcurrentTrials,
+          iteration > 1 ? 30 : 4,
+        )
+      }
+      for (const id of ids) {
+        if (!release.partitions[validationPartition].some((row) => row.instance_id === id)) {
+          throw new ProtocolError(`Validation task must come from ${validationPartition} partition`)
+        }
+        selectedTasks.add(id)
+      }
+      return ids.length === release.partitions[validationPartition].length
+        ? await environment.runPartition(candidate, validationPartition)
         : await environment.runTasks(candidate, ids)
     },
 
@@ -537,7 +653,7 @@ export async function createBaselineRuntime({
       const prompt = formatPython(prompts.CURATOR_PROMPT_NO_GT, [], {
         token_budget: 80_000,
         current_step: iteration,
-        total_samples: release.partitions.feedback.length,
+        total_samples: release.partitions[validationPartition].length,
         playbook_stats: JSON.stringify({ total_bullets: state.bullets.length }),
         recent_reflection: JSON.stringify(reflection),
         current_playbook: renderPlaybook(state),
@@ -583,12 +699,20 @@ export async function createBaselineRuntime({
       `ace-${iteration}`,
     ),
 
-    async evolve({ current, evidence, history, iteration }) {
+    async evolve({ current, evidence, history, iteration, protocol }) {
+      const protocolNotice = protocol === 'evobench-paper'
+        ? `Evo-Bench paper protocol: Feedback is the detailed evolver evidence; ${validationPartition} is the `
+          + 'online validation score and Final is held out. Submit one candidate; the controller evaluates the '
+          + 'suite, continues from the candidate even after a regression, and retains the best validation '
+          + 'checkpoint for the held-out final evaluation. '
+        : 'Cowork adaptation: visible validation maps to Feedback; Selection exposes aggregate scores only. '
+          + 'This session submits one candidate. The current revision continues after regressions while the '
+          + 'Controller retains the best Selection checkpoint. '
       const prompt = `${prompts.EVO_IDENTITY}\n\n${prompts.EVO_WORKFLOW}\n\n`
-        + 'Cowork adaptation: visible validation maps to Feedback; Selection exposes aggregate scores only. '
-        + 'This session submits one candidate. The current revision continues after regressions while the '
-        + 'Controller retains the best Selection checkpoint. Prior feedback and reports are in the feedback '
-        + 'packet: cases are the latest validation pass and history preserves prior reports. '
+        + protocolNotice
+        + (protocol === 'evobench-paper'
+          ? 'The feedback packet contains fixed H0 cases and cumulative candidate validation scores and reports. '
+          : 'Prior feedback and reports are in the feedback packet: cases are the latest validation pass and history preserves prior reports. ')
         + 'Edit only mutation-policy paths and return JSON with diagnosis, hypothesis, changedFiles, '
         + 'expectedImpact, validation, and remainingRisks.'
       return await codingSession({

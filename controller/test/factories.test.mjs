@@ -20,6 +20,7 @@ test('Driver Registry 暴露带版本的内置协议', () => {
   ])
   assert.deepEqual(protocols.solver, ['dsh-headless-docker-v1', 'msa-minimal-docker-v1'])
   assert.deepEqual(protocols.updater, [
+    'claude-code-docker-v1',
     'claude-code-exec-v1',
     'codex-exec-v1',
     'dsh-headless-docker-v1',

@@ -81,7 +81,8 @@ test('MSA Bash Tool 将非 UTF-8 的 Office 原始字节安全替换，不让 So
   })
   const result = JSON.parse(stdout)
   assert.equal(result.returncode, 0)
-  assert.equal(result.output, '\ufffdok')
+  // Login shells may prepend a host welcome banner before the command output.
+  assert.match(result.output, /\ufffdok$/u)
 })
 
 test('MSA Cowork Runtime 派生镜像绑定 Task Image、Source 与定义摘要', async () => {

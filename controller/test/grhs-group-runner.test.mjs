@@ -109,16 +109,14 @@ test('GRHS 执行四个 sibling，Selection 只在完整组完成后返回 Winne
   assert.equal((await stat(checkpointPath)).mode & 0o777, 0o400)
 })
 
-test('GRHS 并行执行 sibling，并在各自 Updater 完成后立即启动 Selection', async () => {
+test('GRHS 并行执行全部 Updater，再并行执行全部 Selection', async () => {
   const groupRoot = await mkdtemp(join(tmpdir(), 'grhs-group-parallel-'))
   let updaterStarted = 0
   let selectionStarted = 0
   let releaseUpdaters
-  let firstSelectionStarted
-  let releaseRemainingUpdaters
+  let releaseSelections
   const updaterBarrier = new Promise((resolve) => { releaseUpdaters = resolve })
-  const firstSelection = new Promise((resolve) => { firstSelectionStarted = resolve })
-  const remainingUpdaterBarrier = new Promise((resolve) => { releaseRemainingUpdaters = resolve })
+  const selectionBarrier = new Promise((resolve) => { releaseSelections = resolve })
   const result = await executeGrhsGroup({
     strategy: strategy(),
     strategyContext: context(),
@@ -131,15 +129,13 @@ test('GRHS 并行执行 sibling，并在各自 Updater 完成后立即启动 Sel
       updaterStarted += 1
       if (updaterStarted === 4) releaseUpdaters()
       await updaterBarrier
-      if (member.candidateId !== 'g001-grhs-s001-l3') await remainingUpdaterBarrier
+      assert.equal(selectionStarted, 0)
       return { member }
     },
     async evaluateSibling(member) {
       selectionStarted += 1
-      if (member.candidateId === 'g001-grhs-s001-l3') {
-        firstSelectionStarted()
-        releaseRemainingUpdaters()
-      } else await firstSelection
+      if (selectionStarted === 4) releaseSelections()
+      await selectionBarrier
       return siblingResult(member)
     },
     async verifyCompletedSibling() {},
@@ -149,11 +145,58 @@ test('GRHS 并行执行 sibling，并在各自 Updater 完成后立即启动 Sel
   assert.equal(result.candidates.length, 4)
 })
 
-test('GRHS 中断恢复时复用已完成 sibling，只重跑未提交 sibling', async () => {
+test('GRHS 按阶段限制并发，Updater 三次失败后仍决策 Winner', async () => {
+  const groupRoot = await mkdtemp(join(tmpdir(), 'grhs-group-limits-'))
+  const attempts = new Map()
+  let activeUpdaters = 0
+  let maxUpdaters = 0
+  let activeEvaluations = 0
+  let maxEvaluations = 0
+  const evaluated = []
+  const nextTurn = () => new Promise((resolve) => setImmediate(resolve))
+  const result = await executeGrhsGroup({
+    strategy: strategy(), strategyContext: context(), previousStrategyState: null,
+    groupRoot, updaterConcurrency: 1, evaluationConcurrency: 2,
+    async prepareSharedEvidence() {
+      return { feedbackPacket: { candidateId: 'h0' }, baselineRecords: [] }
+    },
+    async prepareSibling(member) {
+      const id = member.candidateId
+      attempts.set(id, (attempts.get(id) ?? 0) + 1)
+      activeUpdaters += 1
+      maxUpdaters = Math.max(maxUpdaters, activeUpdaters)
+      await nextTurn()
+      activeUpdaters -= 1
+      if (id.endsWith('s004-l3')) throw new Error('upstream unavailable')
+      return { id }
+    },
+    async evaluateSibling(member, prepared) {
+      assert.equal(prepared.id, member.candidateId)
+      assert.equal(attempts.size, 4)
+      assert.equal(activeUpdaters, 0)
+      activeEvaluations += 1
+      maxEvaluations = Math.max(maxEvaluations, activeEvaluations)
+      evaluated.push(member.candidateId)
+      await nextTurn()
+      activeEvaluations -= 1
+      return siblingResult(member)
+    },
+    async verifyCompletedSibling() {},
+  })
+  assert.equal(maxUpdaters, 1)
+  assert.equal(maxEvaluations, 2)
+  assert.deepEqual([...attempts.values()], [1, 1, 1, 3])
+  assert.equal(evaluated.length, 3)
+  assert.equal(result.candidates[3].valid, false)
+  assert.equal(result.candidates[3].promotionEligible, false)
+  assert.match(result.candidates[3].rejection.message, /连续 3 次失败/u)
+  assert.equal(result.decision.promotedCandidateId, 'g001-grhs-s003-l3')
+})
+
+test('GRHS 单个 sibling 失败后继续，恢复时复用已提交的成功与失败候选', async () => {
   const groupRoot = await mkdtemp(join(tmpdir(), 'grhs-group-resume-'))
   let firstRunCalls = 0
-  await assert.rejects(
-    executeGrhsGroup({
+  const interrupted = await executeGrhsGroup({
       strategy: strategy(),
       strategyContext: context(),
       previousStrategyState: null,
@@ -167,9 +210,10 @@ test('GRHS 中断恢复时复用已完成 sibling，只重跑未提交 sibling',
         return siblingResult(member)
       },
       async verifyCompletedSibling() {},
-    }),
-    /模拟中断/u,
-  )
+    })
+  assert.equal(interrupted.candidates.length, 4)
+  assert.equal(interrupted.candidates[2].valid, false)
+  assert.match(interrupted.candidates[2].rejection.message, /模拟中断/u)
   assert.equal(firstRunCalls, 4)
 
   const reused = []
@@ -193,8 +237,9 @@ test('GRHS 中断恢复时复用已完成 sibling，只重跑未提交 sibling',
   assert.deepEqual(reused, [
     'g001-grhs-s001-l3',
     'g001-grhs-s002-l3',
+    'g001-grhs-s003-l3',
     'g001-grhs-s004-l3',
   ])
-  assert.deepEqual(rerun, ['g001-grhs-s003-l3'])
+  assert.deepEqual(rerun, [])
   assert.equal(result.candidates.length, 4)
 })

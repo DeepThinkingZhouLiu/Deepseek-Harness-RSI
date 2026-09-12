@@ -78,6 +78,7 @@ const { positionals, values } = parseArgs({
     experiment: { type: 'string' },
     'run-id': { type: 'string' },
     'source-run-id': { type: 'string' },
+    'reuse-h0-feedback': { type: 'string' },
     'resume-h0': { type: 'boolean' },
     'restart-h0-with-config-change': { type: 'boolean' },
   },
@@ -162,6 +163,9 @@ if (command === 'check') {
     repositoryRoot: REPOSITORY_ROOT,
     runRoot,
     resumeH0: command === 'run' && values['resume-h0'] === true,
+    reuseH0FeedbackPath: values['reuse-h0-feedback']
+      ? resolveInside(REPOSITORY_ROOT, values['reuse-h0-feedback'], 'reusable H0 Feedback')
+      : null,
     onEvent: (message) => console.log(message),
   })
   try {
@@ -169,6 +173,9 @@ if (command === 'check') {
       console.log(JSON.stringify(await runtime.preflight(), null, 2))
     }
     if (command === 'run') {
+      const validationPartition = bundle.config.method === 'evo-bench-paper'
+        ? bundle.config.evoBenchProtocol.validationPartition
+        : 'feedback'
       const feedbackIds = shuffled(
         release.partitions.feedback.map((row) => row.instance_id),
         bundle.config.seed,
@@ -181,6 +188,10 @@ if (command === 'check') {
         feedbackTraversal: bundle.config.feedbackTraversal,
         feedbackConcurrency: bundle.config.feedbackConcurrency ?? 1,
         feedbackIds,
+        validationIds: shuffled(
+          release.partitions[validationPartition].map((row) => row.instance_id),
+          bundle.config.seed,
+        ),
         runtime,
       })
       await writeJsonFile(join(runRoot, 'summary.json'), {

@@ -148,18 +148,15 @@ test('Cowork-Bench 240 正式实验固定为 N1-K4-B4 和三段式全量划分',
   assert.equal(bundle.recipe.spec.moduleSearch.group.size, 4)
   assert.equal(bundle.recipe.spec.moduleSearch.riskCeiling, 'l3')
   assert.deepEqual(bundle.recipe.spec.checkpointing.budgetMilestones, [0, 4])
-  assert.equal(bundle.benchmark.id, 'cowork-bench-240-v0.2')
-  assert.equal(
-    bundle.benchmark.source.revision,
-    'aac0f28d4596eefbc50041b54ba3bbadf59d6f1b',
-  )
+  assert.equal(bundle.benchmark.id, 'cowork-bench-240-v0.4')
+  assert.equal(bundle.benchmark.source.split, 'benchmarks/cowork-evo-240-v0.4')
   assert.equal(
     bundle.environment.source.datasetRevision,
-    'aac0f28d4596eefbc50041b54ba3bbadf59d6f1b',
+    bundle.benchmark.source.revision,
   )
   assert.equal(
     bundle.environment.source.evaluatorRevision,
-    'aac0f28d4596eefbc50041b54ba3bbadf59d6f1b',
+    bundle.benchmark.source.revision,
   )
   assert.equal(bundle.benchmark.partitions.feedback.instanceIds.length, 90)
   assert.equal(bundle.benchmark.partitions.selection.instanceIds.length, 30)

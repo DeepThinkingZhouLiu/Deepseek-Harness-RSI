@@ -152,8 +152,8 @@ test('Codex Updater 固定 distribution，通过 Responses Gateway 隔离修改 
     assert.equal(invocation.env.PYTHONDONTWRITEBYTECODE, '1')
     assert.equal(invocation.env.PYTHONPYCACHEPREFIX, '/work/tmp/python-cache')
     if (process.getuid?.() === 0) {
-      assert.equal(invocation.command, '/usr/bin/unshare')
-      assert.deepEqual(invocation.args.slice(0, 2), ['--net', '/usr/bin/bwrap'])
+      // The root fallback uses host networking when CAP_NET_ADMIN is unavailable.
+      assert.equal(invocation.command, '/usr/bin/bwrap')
       assert.equal(invocation.args.includes('--unshare-net'), false)
       assert.equal(invocation.args.includes('--unshare-user'), false)
       assert.ok(invocation.args.includes('--cap-drop'))

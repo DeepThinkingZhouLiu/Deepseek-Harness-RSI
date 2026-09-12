@@ -20,7 +20,9 @@ function fixtureDistributionDigest(files) {
   return hash.digest('hex')
 }
 
-test('Claude Code Updater 固定 distribution，通过 Anthropic Gateway 隔离修改 Candidate', async () => {
+test('Claude Code Updater 固定 distribution，通过 Anthropic Gateway 隔离修改 Candidate', async (t) => {
+  t.mock.method(process, 'getuid', () => 1000)
+  t.mock.method(process, 'getgid', () => 1000)
   const root = await mkdtemp(join(tmpdir(), 'claude-code-updater-test-'))
   const previousKey = process.env.RSI_CLAUDE_PROVIDER_API_KEY
   const previousBaseUrl = process.env.RSI_CLAUDE_PROVIDER_BASE_URL
