@@ -1966,6 +1966,7 @@ export function createCoworkBranchEvolutionDriver({
       },
       previousStrategyState: state.spec.searchStrategyState,
       groupRoot,
+      updaterConcurrency: 1,
       evaluationConcurrency: 2,
       async prepareSharedEvidence() {
         const importsFeedback = baselinePack !== null && generation === 1

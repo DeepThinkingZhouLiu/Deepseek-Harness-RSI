@@ -111,6 +111,7 @@ export async function executeGrhsGroup({
   runSibling,
   prepareSibling = null,
   evaluateSibling = null,
+  updaterConcurrency = null,
   evaluationConcurrency = null,
   verifyCompletedSibling,
   onSiblingCompleted = async () => {},
@@ -191,9 +192,16 @@ export async function executeGrhsGroup({
   const pending = entries.filter((entry) => !entry.reused)
   let executions
   if (stagedExecution) {
-    const preparations = await Promise.allSettled(
-      pending.map((entry) => prepareSibling(entry.member)),
-    )
+    const preparationLimit = Number.isSafeInteger(updaterConcurrency) && updaterConcurrency > 0
+      ? updaterConcurrency
+      : pending.length
+    const preparations = []
+    for (let start = 0; start < pending.length; start += preparationLimit) {
+      const batch = pending.slice(start, start + preparationLimit)
+      preparations.push(...await Promise.allSettled(
+        batch.map((entry) => prepareSibling(entry.member)),
+      ))
+    }
     const preparationFailure = preparations.find((outcome) => outcome.status === 'rejected')
     if (preparationFailure) throw preparationFailure.reason
     executions = pending.map((entry, index) => async () => (
