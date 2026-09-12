@@ -233,10 +233,9 @@ export async function createBaselineRuntime({
   }
   const checkBudget = async () => remainingTime()
   const baselineEnvironment = structuredClone(infrastructure)
-  baselineEnvironment.task.maximumConcurrentTrials = Math.min(
-    infrastructure.task.maximumConcurrentTrials,
-    config.maximumConcurrentTrials ?? infrastructure.task.maximumConcurrentTrials,
-  )
+  // EvoBench uses a conservative first round, then opens the task fan-out
+  // once the first evolved candidate has completed selection.
+  baselineEnvironment.task.maximumConcurrentTrials = infrastructure.task.maximumConcurrentTrials
   const environment = new BaselineCoworkEnvironment({
     release,
     environment: baselineEnvironment,
@@ -539,6 +538,10 @@ export async function createBaselineRuntime({
       if (selections.has(candidate.id)) {
         throw new ProtocolError('Candidate selection already evaluated')
       }
+      const iteration = /^evo-(\d+)$/u.exec(candidate.id)?.[1]
+      baselineEnvironment.task.maximumConcurrentTrials = iteration !== undefined && Number(iteration) > 1
+        ? Math.min(30, infrastructure.task.maximumConcurrentTrials)
+        : Math.min(4, infrastructure.task.maximumConcurrentTrials)
       const records = await environment.runPartition(candidate, 'selection')
       const result = selectionAggregate(records)
       selections.set(candidate.id, records)
