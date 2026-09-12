@@ -198,14 +198,40 @@ export async function executeGrhsGroup({
     const preparations = []
     for (let start = 0; start < pending.length; start += preparationLimit) {
       const batch = pending.slice(start, start + preparationLimit)
-      preparations.push(...await Promise.allSettled(
-        batch.map((entry) => prepareSibling(entry.member)),
-      ))
+      for (const entry of batch) {
+        let prepared = null
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+          try {
+            prepared = await prepareSibling(entry.member)
+            break
+          } catch (error) {
+            if (attempt === 3) {
+              prepared = { __grhsPreparationFailure: error?.message ?? String(error) }
+            }
+          }
+        }
+        preparations.push({ status: 'fulfilled', value: prepared })
+      }
     }
-    const preparationFailure = preparations.find((outcome) => outcome.status === 'rejected')
-    if (preparationFailure) throw preparationFailure.reason
     executions = pending.map((entry, index) => async () => (
-      await evaluateSibling(entry.member, preparations[index].value)
+      preparations[index].value?.__grhsPreparationFailure
+        ? {
+            id: entry.member.candidateId,
+            parentId: championId,
+            mutationPlanId: entry.member.plan.metadata.id,
+            regionIds: entry.member.plan.spec.regionIds,
+            valid: false,
+            promotionEligible: false,
+            qualityDelta: null,
+            evaluation: null,
+            baselineEvaluation: null,
+            decision: null,
+            rejection: {
+              stage: 'sibling-preparation',
+              message: `Updater 连续 3 次失败，按 0 分候选继续：${preparations[index].value.__grhsPreparationFailure}`,
+            },
+          }
+        : await evaluateSibling(entry.member, preparations[index].value)
     ))
   } else {
     executions = pending.map((entry) => async () => await runSibling(entry.member))
