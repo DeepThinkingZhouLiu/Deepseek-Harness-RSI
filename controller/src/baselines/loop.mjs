@@ -32,6 +32,7 @@ export async function runBaseline({
   method: methodId,
   budget,
   feedbackIds,
+  validationIds = feedbackIds,
   runtime,
   maximumReflectionRounds = 3,
   feedbackTraversal = 'single-sample',
@@ -42,14 +43,17 @@ export async function runBaseline({
     throw new ProtocolError('Invalid baseline configuration')
   }
   const method = getBaselineMethod(methodId)
+  const validationOnly = method.validationOnly === true
   let current = await runtime.initialize()
   const h0 = current
   let champion = current
-  const baselineSelection = aggregate(await runtime.selection(h0))
-  let championSelection = baselineSelection
-  const initialized = await method.initialize({ runtime, current, feedbackIds })
+  const initialized = await method.initialize({ runtime, current, feedbackIds, validationIds })
   let methodState = initialized.state
   let evidence = initialized.evidence
+  const baselineSelection = validationOnly
+    ? aggregate(initialized.selection ?? method.scoreEvidence(evidence))
+    : aggregate(await runtime.selection(h0))
+  let championSelection = baselineSelection
   const history = []
   let consumed = 0
   let stopReason = 'candidate-budget'
@@ -63,6 +67,7 @@ export async function runBaseline({
         runtime,
         current,
         feedbackIds,
+        validationIds,
         iteration,
         budget,
         state: methodState,
@@ -83,13 +88,18 @@ export async function runBaseline({
 
       await runtime.assertCandidate(candidate)
       const nextEvidence = await method.observe({
-        runtime, candidate, evidence, feedbackIds,
+        runtime, candidate, evidence, feedbackIds, validationIds,
       })
-      const selection = aggregate(await runtime.selection(candidate))
+      const selection = validationOnly
+        ? aggregate(nextEvidence.selection ?? method.scoreEvidence(nextEvidence.evidence ?? nextEvidence))
+        : aggregate(await runtime.selection(candidate))
       const parentId = current.id
       current = candidate
-      if ((selection.meanReward > championSelection.meanReward
-          && await runtime.promotion({ champion, candidate }))) {
+      const improvesChampion = selection.meanReward > championSelection.meanReward
+      const promoted = validationOnly
+        ? improvesChampion
+        : improvesChampion && await runtime.promotion({ champion, candidate })
+      if (promoted) {
         champion = candidate
         championSelection = selection
       }
@@ -97,7 +107,7 @@ export async function runBaseline({
       await runtime.checkpoint({
         iteration, current, champion, championSelection, history, methodState,
       })
-      evidence = nextEvidence
+      evidence = nextEvidence.evidence ?? nextEvidence
     } catch (error) {
       if (!(error instanceof BaselineBudgetExhausted)) throw error
       stopReason = error.message
@@ -109,6 +119,9 @@ export async function runBaseline({
   return {
     method: methodId,
     methodVariant: method.variant,
+    scorePartition: validationOnly
+      ? (runtime.validationPartition ?? 'feedback')
+      : 'selection',
     frozen,
     baselineSelection,
     championSelection,

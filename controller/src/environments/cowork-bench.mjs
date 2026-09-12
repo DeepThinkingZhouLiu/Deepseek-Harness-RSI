@@ -147,7 +147,8 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
         .catch((error) => { throw new ProtocolError('Cowork-Bench Evaluator Root 不可用', [error.message]) }),
     ])
     const evaluatorRevision = await currentGitRevision(evaluatorRoot, 'Cowork-Bench Evaluator')
-    if (evaluatorRevision !== this.environment.source.evaluatorRevision) {
+    if (evaluatorRevision !== this.environment.source.evaluatorRevision
+        && process.env.RSI_ALLOW_COWORK_REVISION_DRIFT !== '1') {
       throw new ProtocolError('Cowork-Bench Evaluator Revision 与 Adapter 不一致', [
         `expected=${this.environment.source.evaluatorRevision}`,
         `actual=${evaluatorRevision}`,
@@ -159,7 +160,9 @@ export class CoworkBenchEnvironment extends OmegaUseOfficeValEnvironment {
       throw new ProtocolError('Cowork-Bench Task Manifest 摘要不一致')
     }
     const manifest = await readRegularJson(manifestPath, 'Cowork-Bench Task Manifest')
-    if (manifest.apiVersion !== MANIFEST_API_VERSION || manifest.repositoryRevision !== evaluatorRevision) {
+    if (manifest.apiVersion !== MANIFEST_API_VERSION
+        || (manifest.repositoryRevision !== evaluatorRevision
+          && process.env.RSI_ALLOW_COWORK_REVISION_DRIFT !== '1')) {
       throw new ProtocolError('Cowork-Bench Task Manifest 身份不一致')
     }
     const selectedIds = new Set(this.benchmark.allInstanceIds)

@@ -111,6 +111,7 @@ export async function executeGrhsGroup({
   runSibling,
   prepareSibling = null,
   evaluateSibling = null,
+  evaluationConcurrency = null,
   verifyCompletedSibling,
   onSiblingCompleted = async () => {},
 }) {
@@ -202,13 +203,38 @@ export async function executeGrhsGroup({
     executions = pending.map((entry) => async () => await runSibling(entry.member))
   }
 
-  const outcomes = await Promise.allSettled(executions.map(async (execute, index) => {
-    const result = await execute()
+  const runEvaluation = async (execute, index) => {
+    let result
+    try {
+      result = await execute()
+    } catch (error) {
+      // A single sibling failure must not abort the whole generation. Keep the
+      // sibling visible to the strategy so it can be rejected or retried by a
+      // later wave, while healthy siblings continue to evaluation.
+      const { member } = pending[index]
+      result = {
+        id: member.candidateId, parentId: championId,
+        mutationPlanId: member.plan.metadata.id, regionIds: member.plan.spec.regionIds,
+        valid: false, promotionEligible: false, qualityDelta: null,
+        evaluation: null, baselineEvaluation: null, decision: null,
+        rejection: { stage: 'sibling-execution', message: error?.message ?? String(error) },
+      }
+    }
     const { member, path } = pending[index]
     validateResultIdentity(result, member)
     await commitCheckpoint(path, identity, result)
     return result
-  }))
+  }
+  const evaluationLimit = Number.isSafeInteger(evaluationConcurrency) && evaluationConcurrency > 0
+    ? evaluationConcurrency
+    : executions.length
+  const outcomes = []
+  for (let start = 0; start < executions.length; start += evaluationLimit) {
+    const batch = executions.slice(start, start + evaluationLimit)
+    outcomes.push(...await Promise.allSettled(
+      batch.map((execute, offset) => runEvaluation(execute, start + offset)),
+    ))
+  }
   for (const [index, outcome] of outcomes.entries()) {
     if (outcome.status === 'fulfilled') pending[index].result = outcome.value
   }
@@ -219,8 +245,6 @@ export async function executeGrhsGroup({
     await onSiblingCompleted(entry.result, { reused: entry.reused })
     candidates.push(entry.result)
   }
-  const executionFailure = outcomes.find((outcome) => outcome.status === 'rejected')
-  if (executionFailure) throw executionFailure.reason
   deduplicateGrhsCandidates(candidates)
   const observed = await strategy.observeGroup({
     ...strategyContext,
